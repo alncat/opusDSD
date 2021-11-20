@@ -2,6 +2,7 @@
 Train a VAE for heterogeneous reconstruction with known pose
 '''
 import numpy as np
+import matplotlib.pyplot as plt
 import sys, os
 import argparse
 import pickle
@@ -26,7 +27,7 @@ from cryodrgn import ctf
 
 from cryodrgn.pose import PoseTracker
 from cryodrgn.models import HetOnlyVAE
-from cryodrgn.lattice import Lattice
+from cryodrgn.lattice import Lattice, Grid, CTFGrid
 from cryodrgn.beta_schedule import get_beta_schedule, LinearSchedule
 
 log = utils.log
@@ -88,18 +89,18 @@ def add_args(parser):
     group = parser.add_argument_group('Decoder Network')
     group.add_argument('--dec-layers', dest='players', type=int, default=3, help='Number of hidden layers (default: %(default)s)')
     group.add_argument('--dec-dim', dest='pdim', type=int, default=256, help='Number of nodes in hidden layers (default: %(default)s)')
-    group.add_argument('--pe-type', choices=('geom_ft','geom_full','geom_lowf','geom_nohighf','linear_lowf','none'), default='geom_lowf', help='Type of positional encoding (default: %(default)s)')
+    group.add_argument('--pe-type', choices=('geom_ft','geom_full','geom_lowf','geom_nohighf','linear_lowf','none', 'convwarp', 'vanilla'), default='geom_lowf', help='Type of positional encoding (default: %(default)s)')
     group.add_argument('--pe-dim', type=int, help='Num features in positional encoding (default: image D)')
     group.add_argument('--domain', choices=('hartley','fourier'), default='fourier', help='Decoder representation domain (default: %(default)s)')
     group.add_argument('--activation', choices=('relu','leaky_relu'), default='relu', help='Activation (default: %(default)s)')
     return parser
 
-def train_batch(model, lattice, y, yt, rot, trans, optim, beta, beta_control=None, tilt=None, ctf_params=None, yr=None, use_amp=False):
+def train_batch(model, lattice, y, yt, rot, trans, optim, beta, beta_control=None, tilt=None, grid=None, ctf_grid=None, ctf_params=None, yr=None, use_amp=False, save_image=False, vanilla=True):
     optim.zero_grad()
     model.train()
     if trans is not None:
-        y, yt = preprocess_input(y, yt, lattice, trans)
-    z_mu, z_logvar, z, y_recon, y_recon_tilt, mask = run_batch(model, lattice, y, yt, rot, tilt, ctf_params, yr)
+        y, yt = preprocess_input(y, yt, lattice, trans, vanilla=vanilla, grid=grid)
+    z_mu, z_logvar, z, y_recon, y_recon_tilt, mask = run_batch(model, lattice, y, yt, rot, tilt, ctf_params=ctf_params, yr=yr, vanilla=vanilla, ctf_grid=ctf_grid, grid=grid, save_image=save_image)
     loss, gen_loss, kld = loss_function(z_mu, z_logvar, y, yt, y_recon, mask, beta, y_recon_tilt, beta_control)
     if use_amp:
         with amp.scale_loss(loss, optim) as scaled_loss:
@@ -109,10 +110,15 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta, beta_control=Non
     optim.step()
     return loss.item(), gen_loss.item(), kld.item()
 
-def preprocess_input(y, yt, lattice, trans):
+def preprocess_input(y, yt, lattice, trans, vanilla=True, grid=None):
     # center the image
     B = y.size(0)
     D = lattice.D
+    if vanilla:
+        y = grid.translate(y, trans)
+        if yt is not None:
+            yt = grid.translate(yt, trans)
+        return y, yt
     y = lattice.translate_ht(y.view(B,-1), trans.unsqueeze(1)).view(B,D,D)
     if yt is not None: yt = lattice.translate_ht(yt.view(B,-1), trans.unsqueeze(1)).view(B,D,D)
     return y, yt
@@ -122,38 +128,89 @@ def _unparallelize(model):
         return model.module
     return model
 
-def run_batch(model, lattice, y, yt, rot, tilt=None, ctf_params=None, yr=None):
+def run_batch(model, lattice, y, yt, rot, tilt=None, ctf_params=None, yr=None, vanilla=True, ctf_grid=None, grid=None, save_image=False):
     use_tilt = yt is not None
     use_ctf = ctf_params is not None
     B = y.size(0)
     D = lattice.D
     if use_ctf:
-        freqs = lattice.freqs2d.unsqueeze(0).expand(B,*lattice.freqs2d.shape)/ctf_params[:,0].view(B,1,1)
-        c = ctf.compute_ctf(freqs, *torch.split(ctf_params[:,1:], 1, 1)).view(B,D,D)
+        if not vanilla:
+            freqs = lattice.freqs2d.unsqueeze(0).expand(B,*lattice.freqs2d.shape)/ctf_params[:,0].view(B,1,1)
+            c = ctf.compute_ctf(freqs, *torch.split(ctf_params[:,1:], 1, 1)).view(B,D,D)
+        else:
+            # ctf_params[:,0] is the angpix
+            freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/ctf_params[:,0].view(B,1,1) #(1, (-x+1, x)*x, 2)
+            c = ctf.compute_ctf(freqs, *torch.split(ctf_params[:,1:], 1, 1)).view(B,D-1,-1) #(B, )
 
     # encode
-    if yr is not None:
-        input_ = (yr,)
+    if not vanilla:
+        if yr is not None:
+            input_ = (yr,)
+        else:
+            input_ = (y,yt) if yt is not None else (y,)
+            if use_ctf: input_ = (x*c.sign() for x in input_) # phase flip by the ctf
+        z_mu, z_logvar = _unparallelize(model).encode(*input_)
+        z = _unparallelize(model).reparameterize(z_mu, z_logvar)
     else:
-        input_ = (y,yt) if yt is not None else (y,)
-        if use_ctf: input_ = (x*c.sign() for x in input_) # phase flip by the ctf
-    z_mu, z_logvar = _unparallelize(model).encode(*input_)
-    z = _unparallelize(model).reparameterize(z_mu, z_logvar)
+        z_mu, z_logvar, z = 0., 0., 0.
 
     # decode
-    mask = lattice.get_circular_mask(D//2) # restrict to circular mask
-    y_recon = model(lattice.coords[mask]/lattice.extent/2 @ rot, z).view(B,-1)
-    if use_ctf: y_recon *= c.view(B,-1)[:,mask]
+    if not vanilla:
+        mask = lattice.get_circular_mask(D//2) # restrict to circular mask
+        y_recon = model(lattice.coords[mask]/lattice.extent/2 @ rot, z).view(B,-1)
+    else:
+        mask = grid.get_circular_mask(D//2) # restrict to circular mask
+        y_recon = model(rot)
 
+    if use_ctf:
+        if not vanilla:
+            y_recon *= c.view(B,-1)[:,mask]
+        else:
+            #fft on reconstruction
+            #y_recon = utils.standardize_image(y_recon)
+            #y = utils.standardize_image(y)
+            f, axes = plt.subplots(1, 3)
+            d_i = 0
+            correlations = F.cosine_similarity(y_recon.view(B,-1), y.squeeze(1).view(B,-1))
+            utils.plot_image(axes, y_recon[d_i,...].detach().cpu().numpy(), 0)
+            #utils.plot_image(axes, y[1,0,...].detach().numpy(), 1)
+
+            print(correlations.detach().cpu().numpy())
+
+            y_recon_fft = fft.torch_fft2_center(y_recon)
+            print(y_recon_fft.shape, c.shape, freqs.shape)
+            y_recon_fft *= c
+            y_recon = fft.torch_ifft2_center(y_recon_fft)
+            print(y_recon.shape, y.shape)
+            y_fft = fft.torch_fft2_center(y)
+            print(y_fft.shape, c.shape)
+            y_fft *= c.unsqueeze(1)
+            y_c = fft.torch_ifft2_center(y_fft)
+
+            utils.plot_image(axes, y_recon[d_i,...].detach().cpu().numpy(), 1)
+            utils.plot_image(axes, y[d_i,0,...].detach().cpu().numpy(), 2)
+
+            #y_recon = utils.standardize_image(y_recon)
+            #y = utils.standardize_image(y)
+
+            correlations = F.cosine_similarity(y_recon.view(B,-1), y.squeeze(1).view(B,-1))
+            print(correlations.detach().cpu().numpy())
+
+            plt.show()
     # decode the tilt series
     if use_tilt:
         y_recon_tilt = model(lattice.coords[mask]/lattice.extent/2 @ tilt @ rot, z)
         if use_ctf: y_recon_tilt *= c.view(B,-1)[:,mask]
     else:
         y_recon_tilt = None
+
+    if save_image:
+        torch.save(y, 'reference.pt')
+        torch.save(y, 'reconstruction.pt')
+
     return z_mu, z_logvar, z, y_recon, y_recon_tilt, mask
 
-def loss_function(z_mu, z_logvar, y, yt, y_recon, mask, beta, y_recon_tilt=None, beta_control=None):
+def loss_function(z_mu, z_logvar, y, yt, y_recon, mask, beta, y_recon_tilt=None, beta_control=None, vanilla=False):
     # reconstruction error
     use_tilt = yt is not None
     B = y.size(0)
@@ -161,7 +218,10 @@ def loss_function(z_mu, z_logvar, y, yt, y_recon, mask, beta, y_recon_tilt=None,
     if use_tilt:
         gen_loss = .5*gen_loss + .5*F.mse_loss(y_recon_tilt, yt.view(B,-1)[:,mask])
     # latent loss
-    kld = torch.mean(-0.5 * torch.sum(1 + z_logvar - z_mu.pow(2) - z_logvar.exp(), dim=1), dim=0)
+    if not vanilla:
+        kld = torch.mean(-0.5 * torch.sum(1 + z_logvar - z_mu.pow(2) - z_logvar.exp(), dim=1), dim=0)
+    else:
+        kld = 0.
     # total loss
     if beta_control is None:
         loss = gen_loss + beta*kld/mask.sum().float()
@@ -309,19 +369,20 @@ def main(args):
     # load dataset
     if args.ref_vol is not None:
         flog(f'Loading reference volume from {args.ref_vol}')
-        vol_data = dataset.VolData(args.ref_vol)
+        ref_vol = dataset.VolData(args.ref_vol)
     flog(f'Loading dataset from {args.particles}')
     if args.tilt is None:
         tilt = None
         args.use_real = args.encode_mode == 'conv'
+        args.real_data = args.pe_type == 'vanilla'
 
         if args.lazy:
-            assert args.preprocessed, "Dataset must be preprocesed with `cryodrgn preprocess_mrcs` in order to use --lazy data loading"
+            #assert args.preprocessed, "Dataset must be preprocesed with `cryodrgn preprocess_mrcs` in order to use --lazy data loading"
             assert not args.ind, "For --lazy data loading, dataset must be filtered by `cryodrgn preprocess_mrcs`"
             #data = dataset.PreprocessedMRCData(args.particles, norm=args.norm)
             raise NotImplementedError("Use --lazy-single for on-the-fly image loading")
         elif args.lazy_single:
-            data = dataset.LazyMRCData(args.particles, norm=args.norm, invert_data=args.invert_data, ind=ind, keepreal=args.use_real, window=args.window, datadir=args.datadir, relion31=args.relion31, window_r=args.window_r)
+            data = dataset.LazyMRCData(args.particles, norm=args.norm, real_data=args.real_data, invert_data=args.invert_data, ind=ind, keepreal=args.use_real, window=args.window, datadir=args.datadir, relion31=args.relion31, window_r=args.window_r)
         elif args.preprocessed:
             flog(f'Using preprocessed inputs. Ignoring any --window/--invert-data options')
             data = dataset.PreprocessedMRCData(args.particles, norm=args.norm, ind=ind)
@@ -338,7 +399,7 @@ def main(args):
         data = dataset.TiltMRCData(args.particles, args.tilt, norm=args.norm, invert_data=args.invert_data, ind=ind, window=args.window, keepreal=args.use_real, datadir=args.datadir, window_r=args.window_r)
         tilt = torch.tensor(utils.xrot(args.tilt_deg).astype(np.float32))
     Nimg = data.N
-    D = data.D
+    D = data.D #data dimension
 
     if args.encode_mode == 'conv':
         assert D-1 == 64, "Image size must be 64x64 for convolutional encoder"
@@ -351,8 +412,8 @@ def main(args):
 
     # load ctf
     if args.ctf is not None:
-        if args.use_real:
-            raise NotImplementedError("Not implemented with real-space encoder. Use phase-flipped images instead")
+        #if args.use_real:
+        #    raise NotImplementedError("Not implemented with real-space encoder. Use phase-flipped images instead")
         flog('Loading ctf params from {}'.format(args.ctf))
         ctf_params = ctf.load_ctf_for_training(D-1, args.ctf)
         if args.ind is not None: ctf_params = ctf_params[ind]
@@ -362,6 +423,8 @@ def main(args):
 
     # instantiate model
     lattice = Lattice(D, extent=0.5)
+    grid = Grid(D)
+    ctf_grid = CTFGrid(D)
     if args.enc_mask is None:
         args.enc_mask = D//2
     if args.enc_mask > 0:
@@ -377,7 +440,7 @@ def main(args):
     model = HetOnlyVAE(lattice, args.qlayers, args.qdim, args.players, args.pdim,
                 in_dim, args.zdim, encode_mode=args.encode_mode, enc_mask=enc_mask,
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
-                activation=activation)
+                activation=activation, ref_vol=ref_vol.get())
     flog(model)
     flog('{} parameters in model'.format(sum(p.numel() for p in model.parameters() if p.requires_grad)))
     flog('{} parameters in encoder'.format(sum(p.numel() for p in model.encoder.parameters() if p.requires_grad)))
@@ -386,6 +449,8 @@ def main(args):
     # save configuration
     out_config = '{}/config.pkl'.format(args.outdir)
     save_config(args, data, lattice, model, out_config)
+    # move model to gpu
+    model = model.to(device)
 
     optim = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.wd)
 
@@ -432,6 +497,8 @@ def main(args):
         kld_accum = 0
         eq_loss_accum = 0
         batch_it = 0
+        #
+        vanilla = args.pe_type == "vanilla"
         for minibatch in data_generator:
             ind = minibatch[-1].to(device)
             y = minibatch[0].to(device)
@@ -439,6 +506,7 @@ def main(args):
             B = len(ind)
             batch_it += B
             global_it = Nimg*epoch + batch_it
+            save_image = (batch_it % 100) == 0
 
             beta = beta_schedule(global_it)
 
@@ -447,7 +515,7 @@ def main(args):
                 pose_optimizer.zero_grad()
             rot, tran = posetracker.get_pose(ind)
             ctf_param = ctf_params[ind] if ctf_params is not None else None
-            loss, gen_loss, kld = train_batch(model, lattice, y, yt, rot, tran, optim, beta, args.beta_control, tilt, ctf_params=ctf_param, yr=yr, use_amp=args.amp)
+            loss, gen_loss, kld = train_batch(model, lattice, y, yt, rot, tran, optim, beta, args.beta_control, tilt, grid=grid, ctf_params=ctf_param, ctf_grid=ctf_grid, yr=yr, use_amp=args.amp, vanilla=vanilla, save_image=save_image)
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
 

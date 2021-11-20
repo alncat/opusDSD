@@ -41,8 +41,8 @@ class LazyMRCData(data.Dataset):
     '''
     Class representing an .mrcs stack file -- images loaded on the fly
     '''
-    def __init__(self, mrcfile, norm=None, keepreal=False, invert_data=False, ind=None, window=True, datadir=None, relion31=False, window_r=0.85):
-        assert not keepreal, 'Not implemented error'
+    def __init__(self, mrcfile, norm=None, real_data=True, keepreal=False, invert_data=False, ind=None, window=True, datadir=None, relion31=False, window_r=0.85):
+        #assert not keepreal, 'Not implemented error'
         particles = load_particles(mrcfile, True, datadir=datadir, relion31=relion31)
         if ind is not None:
             particles = [particles[x] for x in ind]
@@ -55,6 +55,7 @@ class LazyMRCData(data.Dataset):
         self.N = N
         self.D = ny + 1 # after symmetrizing HT
         self.invert_data = invert_data
+        self.real_data = real_data
         if norm is None:
             norm = self.estimate_normalization()
         self.norm = norm
@@ -62,18 +63,25 @@ class LazyMRCData(data.Dataset):
 
     def estimate_normalization(self, n=1000):
         n = min(n,self.N)
-        imgs = np.asarray([fft.ht2_center(self.particles[i].get()) for i in range(0,self.N, self.N//n)])
+        if self.real_data:
+            imgs = np.asarray([self.particles[i].get() for i in range(0,self.N, self.N//n)])
+        else:
+            imgs = np.asarray([fft.ht2_center(self.particles[i].get()) for i in range(0,self.N, self.N//n)])
         if self.invert_data: imgs *= -1
-        imgs = fft.symmetrize_ht(imgs)
+        if not self.real_data:
+            imgs = fft.symmetrize_ht(imgs)
+        print(imgs[0])
         norm = [np.mean(imgs), np.std(imgs)]
-        norm[0] = 0
         log('Normalizing HT by {} +/- {}'.format(*norm))
+        norm[0] = 0
         return norm
 
     def get(self, i):
         img = self.particles[i].get()
         if self.window is not None:
             img *= self.window
+        if self.real_data:
+            return img
         img = fft.ht2_center(img).astype(np.float32)
         if self.invert_data: img *= -1
         img = fft.symmetrize_ht(img)
@@ -88,11 +96,50 @@ class LazyMRCData(data.Dataset):
 
 def window_mask(D, in_rad, out_rad):
     assert D % 2 == 0
-    x0, x1 = np.meshgrid(np.linspace(-1, 1, D, endpoint=False, dtype=np.float32), 
+    x0, x1 = np.meshgrid(np.linspace(-1, 1, D, endpoint=False, dtype=np.float32),
                          np.linspace(-1, 1, D, endpoint=False, dtype=np.float32))
     r = (x0**2 + x1**2)**.5
     mask = np.minimum(1.0, np.maximum(0.0, 1 - (r-in_rad)/(out_rad-in_rad)))
     return mask
+
+class VolData(data.Dataset):
+    '''
+    Class representing an .mrcs stack file
+    '''
+    def __init__(self, mrcfile, norm=None, invert_data=False, ind=None, datadir=None, relion31=False, max_threads=16, window_r=0.85):
+        if ind is not None:
+            particles = load_particles(mrcfile, True, datadir=datadir, relion31=relion31)
+            particles = np.array([particles[i].get() for i in ind])
+        else:
+            particles = load_particles(mrcfile, False, datadir=datadir, relion31=relion31)
+        N, ny, nx = particles.shape
+        assert N == ny == nx, "Images must be cubic"
+        assert ny % 2 == 0, "Image size must be even"
+        log('Loaded {} {}x{} images'.format(N, ny, nx))
+
+        if invert_data: particles *= -1
+
+        # normalize
+        if norm is None:
+            norm  = [np.mean(particles), np.std(particles)]
+            norm[0] = 0
+        #particles = (particles - norm[0])/norm[1]
+        #log('Normalized HT by {} +/- {}'.format(*norm))
+
+        self.particles = particles
+        self.volume = torch.from_numpy(self.particles)
+        self.N = N
+        self.D = particles.shape[1] # ny
+        self.norm = norm
+
+    def __len__(self):
+        return self.N
+
+    def __getitem__(self, index):
+        return self.particles[index], index
+
+    def get(self):
+        return self.volume
 
 class MRCData(data.Dataset):
     '''
@@ -126,7 +173,7 @@ class MRCData(data.Dataset):
         else:
             particles = np.asarray([fft.ht2_center(img) for img in particles], dtype=np.float32)
             log('Converted to FFT')
-            
+
         if invert_data: particles *= -1
 
         # symmetrize HT
@@ -211,12 +258,12 @@ class TiltMRCData(data.Dataset):
         if window:
             m = window_mask(ny, window_r, .99)
             particles_real *= m
-            particles_tilt_real *= m 
+            particles_tilt_real *= m
 
         # compute HT
         particles = np.asarray([fft.ht2_center(img) for img in particles_real]).astype(np.float32)
         particles_tilt = np.asarray([fft.ht2_center(img) for img in particles_tilt_real]).astype(np.float32)
-        if invert_data: 
+        if invert_data:
             particles *= -1
             particles_tilt *= -1
 

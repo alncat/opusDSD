@@ -24,7 +24,7 @@ def main(args):
     s = starfile.Starfile.load(args.input, relion31=args.relion31)
     N = len(s.df)
     log('{} particles'.format(N))
-    
+
     # parse rotations
     keys = ('_rlnAngleRot','_rlnAngleTilt','_rlnAnglePsi')
     euler = np.empty((N,3))
@@ -50,8 +50,8 @@ def main(args):
 
     log('Translations (pixels):')
     log(trans[0])
-    
-    # convert translations from pixels to fraction 
+
+    # convert translations from pixels to fraction
     trans /= args.D
 
     # write output

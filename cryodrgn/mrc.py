@@ -38,7 +38,7 @@ class MRCHeader:
               'cmap','stamp','rms', # char[4], float
               'nlabl','labels'] # int, char[10][80]
     FSTR = '3ii3i3i3f3f3i3f2ih30x2h20x2i6h6f3f4s4sfi800s'
-    STRUCT = struct.Struct(FSTR) 
+    STRUCT = struct.Struct(FSTR)
 
     def __init__(self, header_values, extended_header=b''):
         self.fields = OrderedDict(zip(self.FIELDS,header_values))
@@ -57,7 +57,7 @@ class MRCHeader:
             extended_header = f.read(extbytes)
             header.extended_header = extended_header
         return header
-    
+
     @classmethod
     def make_default_header(cls, data, is_vol=True, Apix=1., xorg=0., yorg=0., zorg=0.):
         nz, ny, nx = data.shape
@@ -95,12 +95,12 @@ class MRCHeader:
 
     def get_apix(self):
         return self.fields['xlen']/self.fields['nx']
-    
+
     def update_apix(self, Apix):
         self.fields['xlen'] = self.fields['nx']*Apix
         self.fields['ylen'] = self.fields['ny']*Apix
         self.fields['zlen'] = self.fields['nz']*Apix
-    
+
     def get_origin(self):
         return self.fields['xorg'], self.fields['yorg'], self.fields['zorg']
 
@@ -143,14 +143,14 @@ def parse_mrc_list(txtfile, lazy=False):
 def parse_mrc(fname, lazy=False):
     # parse the header
     header = MRCHeader.parse(fname)
-    
+
     ## get the number of bytes in extended header
     extbytes = header.fields['next']
     start = 1024+extbytes # start of image data
 
     dtype = header.dtype
     nz, ny, nx = header.fields['nz'], header.fields['ny'], header.fields['nx']
-    
+
     # load all in one block
     if not lazy:
         with open(fname, 'rb') as fh:
@@ -161,8 +161,9 @@ def parse_mrc(fname, lazy=False):
     else:
         stride = dtype().itemsize*ny*nx
         array = [LazyImage(fname, (ny, nx), dtype, start+i*stride) for i in range(nz)]
+    print(header)
     return array, header
-   
+
 def write(fname, array, header=None, Apix=1., xorg=0., yorg=0., zorg=0., is_vol=None):
     # get a default header
     if header is None:

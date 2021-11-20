@@ -4,15 +4,88 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
 
 from . import utils
 
 log = utils.log
+class CTFGrid:
+    def __init__(self, D):
+        self.vol_size = D - 1
+        self.x_size = self.vol_size//2 + 1
+        x_idx = torch.arange(self.x_size)/float(self.vol_size) #(0, 0.5]
+        y_idx = torch.arange(-self.x_size+2, self.x_size)/float(self.vol_size) #(-0.5, 0.5]
+        grid  = torch.meshgrid(y_idx, x_idx)
+        grid_x = grid[1] #change fast [[0,1,2,3]]
+        grid_y = torch.roll(grid[0], shifts=(self.x_size), dims=(0)) #fft shifted, center at the corner
+        self.freqs2d = torch.stack((grid_x, grid_y), dim=-1)
+        print("ctf grid shape: ", self.freqs2d.shape)
+        print("ctf grid: ", self.freqs2d)
+        self.D = D - 1
+        # flatten to 2d
+        #self.freqs2d = self.freqs2d.view((-1,2))
+
+class Grid:
+    def __init__(self, D):
+        print("initializing 2d grid of size ", D - 1)
+        self.vol_size = D - 1
+        self.x_size = self.vol_size//2 + 1
+        x_idx = torch.arange(0, self.vol_size, dtype=torch.float32)
+        grids = torch.meshgrid(x_idx, x_idx)
+        #grids[1], (0, ..., vol)
+        self.grid = torch.stack((grids[1], grids[0]), dim=-1)
+        #print(self.grid)
+        self.circular_masks = {}
+        self.square_masks = {}
+
+    def translate(self, images, trans):
+        # trans (,2)
+        #print(images.shape, self.grid.shape, trans.shape)
+        print(trans)
+        #f, axes = plt.subplots(1, 2)
+        #utils.plot_image(axes, images[0,...].detach().numpy(), 0)
+
+        B = trans.shape[0]
+        trans_dim = trans.shape[1]
+        grid_t = self.grid.unsqueeze(0) - trans.view((B, 1, 1, trans_dim))
+        # put in range -1, 1
+        grid_t = 2.*(grid_t/float(self.vol_size - 1.) - 0.5)
+        translated = F.grid_sample(images.unsqueeze(1), grid_t)
+        #utils.plot_image(axes, translated[0,0,...].detach().numpy() - images[0,...].detach().numpy(), 1)
+        #plt.show()
+        return translated
+
+    def get_square_mask(self, L):
+        if L in self.square_masks:
+            return self.square_masks[L]
+        #L is the size of the square
+        left = (self.vol_size - L)/2
+        right = (self.vol_size - L)/2 + L
+
+        mask_xl = self.grid[..., 0] >= left
+        mask_xr = self.grid[..., 0] < right
+        mask_x = mask_xl*mask_xr
+        mask_yl = self.grid[..., 1] >= left
+        mask_yr = self.grid[..., 1] < right
+        mask_y = mask_yl*mask_yr
+        mask = mask_x*mask_y
+        self.square_masks[L] = mask
+        return mask
+
+    def get_circular_mask(self, L):
+        if L in self.circular_masks:
+            return self.circular_masks[L]
+        mask = self.grid.pow(2).sum(-1) < L*L
+        #mask = self.grid[..., 0]*self.grid[..., 0] + \
+        #    self.grid[..., 1]*self.grid[..., 1] < L*L
+        self.circular_masks[L] = mask
+        return mask
+
 
 class Lattice:
     def __init__(self, D, extent=0.5, ignore_DC=True):
         assert D % 2 == 1, "Lattice size must be odd"
-        x0, x1 = np.meshgrid(np.linspace(-extent, extent, D, endpoint=True), 
+        x0, x1 = np.meshgrid(np.linspace(-extent, extent, D, endpoint=True),
                              np.linspace(-extent, extent, D, endpoint=True))
         coords = np.stack([x0.ravel(),x1.ravel(),np.zeros(D**2)],1).astype(np.float32)
         self.coords = torch.tensor(coords)
@@ -21,21 +94,21 @@ class Lattice:
         self.D2 = int(D/2)
 
         # todo: center should now just be 0,0; check Lattice.rotate...
-        # c = 2/(D-1)*(D/2) -1 
+        # c = 2/(D-1)*(D/2) -1
         # self.center = torch.tensor([c,c]) # pixel coordinate for img[D/2,D/2]
         self.center = torch.tensor([0.,0.])
-        
+
         self.square_mask = {}
         self.circle_mask = {}
 
-        self.freqs2d = self.coords[:,0:2]/extent/2
+        self.freqs2d = self.coords[:,0:2]/extent/2 #(-0.5, 0.5)
 
         self.ignore_DC = ignore_DC
 
     def get_downsample_coords(self, d):
         assert d % 2 == 1
         extent = self.extent * (d-1) / (self.D-1)
-        x0, x1 = np.meshgrid(np.linspace(-extent, extent, d, endpoint=True), 
+        x0, x1 = np.meshgrid(np.linspace(-extent, extent, d, endpoint=True),
                              np.linspace(-extent, extent, d, endpoint=True))
         coords = np.stack([x0.ravel(),x1.ravel(),np.zeros(d**2)],1).astype(np.float32)
         return torch.tensor(coords)
@@ -97,16 +170,16 @@ class Lattice:
     def translate_ft(self, img, t, mask=None):
         '''
         Translate an image by phase shifting its Fourier transform
-        
+
         Inputs:
             img: FT of image (B x img_dims x 2)
             t: shift in pixels (B x T x 2)
             mask: Mask for lattice coords (img_dims x 1)
 
         Returns:
-            Shifted images (B x T x img_dims x 2) 
+            Shifted images (B x T x img_dims x 2)
 
-        img_dims can either be 2D or 1D (unraveled image) 
+        img_dims can either be 2D or 1D (unraveled image)
         '''
         # F'(k) = exp(-2*pi*k*x0)*F(k)
         coords = self.freqs2d if mask is None else self.freqs2d[mask]
@@ -121,14 +194,14 @@ class Lattice:
     def translate_ht(self, img, t, mask=None):
         '''
         Translate an image by phase shifting its Hartley transform
-        
+
         Inputs:
             img: HT of image (B x img_dims)
             t: shift in pixels (B x T x 2)
             mask: Mask for lattice coords (img_dims x 1)
 
         Returns:
-            Shifted images (B x T x img_dims) 
+            Shifted images (B x T x img_dims)
 
         img must be 1D unraveled image, symmetric around DC component
         '''
@@ -151,7 +224,7 @@ class EvenLattice(Lattice):
         # endpoint=False since FT is not symmetric around origin
         assert D % 2 == 0, "Lattice size must be even"
         if ignore_DC: raise NotImplementedError
-        x0, x1 = np.meshgrid(np.linspace(-1, 1, D, endpoint=False), 
+        x0, x1 = np.meshgrid(np.linspace(-1, 1, D, endpoint=False),
                              np.linspace(-1, 1, D, endpoint=False))
         coords = np.stack([x0.ravel(),x1.ravel(),np.zeros(D**2)],1).astype(np.float32)
         self.coords = torch.tensor(coords)
@@ -159,9 +232,9 @@ class EvenLattice(Lattice):
         self.D = D
         self.D2 = int(D/2)
 
-        c = 2/(D-1)*(D/2) -1 
+        c = 2/(D-1)*(D/2) -1
         self.center = torch.tensor([c,c]) # pixel coordinate for img[D/2,D/2]
-        
+
         self.square_mask = {}
         self.circle_mask = {}
 

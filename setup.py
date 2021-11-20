@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 import os,sys
 sys.path.insert(0, f'{os.path.dirname(__file__)}/cryodrgn')
-import cryodrgn 
+import cryodrgn
 version = cryodrgn.__version__
 
 setup(name='cryodrgn',
@@ -27,10 +27,10 @@ setup(name='cryodrgn',
         'matplotlib',
         'scipy>=1.3.1',
         'scikit-learn',
-        'seaborn',
-        'cufflinks',
-        'jupyterlab',
-        'umap-learn',
-        'ipywidgets'
+        'seaborn'
+        #'cufflinks',
+        #'jupyterlab',
+        #'umap-learn',
+        #'ipywidgets'
         ]
      )

@@ -28,6 +28,7 @@ def add_args(parser):
     group.add_argument('--uninvert-data', dest='invert_data', action='store_false', help='Do not invert data sign')
     group.add_argument('--window-r', default=0.85, type=float, help='Circular windowing mask inner radius (default: %(default)s)')
     group.add_argument('--no-window', dest='window', action='store_false', help='Turn off real space windowing of dataset')
+    group.add_argument('--no-keep-real', dest='keepreal', action='store_false', help='Turn off real space windowing of dataset')
 
     group = parser.add_argument_group('Extra arguments for volume generation')
     group.add_argument('-b', type=int, default=5000, help='Batch size for processing images (default: %(default)s)')
@@ -52,9 +53,9 @@ def main(args):
     # load images
     lazy = args.lazy
     images = dataset.load_particles(args.mrcs, lazy=lazy, datadir=args.datadir, relion31=args.relion31)
-    
+
     # filter images
-    if args.ind is not None: 
+    if args.ind is not None:
         log(f'Filtering image dataset with {args.ind}')
         ind = utils.load_pkl(args.ind).astype(int)
         images = [images[i] for i in ind] if lazy else images[ind]
@@ -64,6 +65,10 @@ def main(args):
     window = args.window
     invert_data = args.invert_data
     downsample = (args.D and args.D < original_D)
+    nokeepreal = args.keepreal
+    log(f'keepreal {args.keepreal}')
+    log(f'lazy {args.lazy}')
+    log(f'invert_data {args.invert_data}')
     if downsample:
         assert args.D <= original_D, f'New box size {args.D} cannot be larger than the original box size {D}'
         assert args.D % 2 == 0, 'New box size must be even'
@@ -95,20 +100,27 @@ def main(args):
         with Pool(min(args.max_threads, mp.cpu_count())) as p:
             # todo: refactor as a routine in dataset.py
 
-            # note: applying the window before downsampling is slightly 
+            # note: applying the window before downsampling is slightly
             # different than in the original workflow
             if window:
                 imgs *= dataset.window_mask(original_D, args.window_r, .99)
-            ret = np.asarray(p.map(fft.ht2_center, imgs))
+            if nokeepreal:
+                ret = np.asarray(p.map(fft.ht2_center, imgs))
+            else:
+                ret = imgs
             if invert_data:
                 ret *= -1
             if downsample:
                 ret = ret[:, start:stop, start:stop]
-            ret = fft.symmetrize_ht(ret)
+            if nokeepreal:
+                ret = fft.symmetrize_ht(ret)
         return ret
 
     def preprocess_in_batches(imgs, b):
-        ret = np.empty((len(imgs), D+1, D+1), dtype=np.float32)
+        if nokeepreal:
+            ret = np.empty((len(imgs), D+1, D+1), dtype=np.float32)
+        else:
+            ret = np.empty((len(imgs), D, D), dtype=np.float32)
         Nbatches = math.ceil(len(imgs)/b)
         for ii in range(Nbatches):
             log(f'Processing batch of {b} images ({ii+1} of {Nbatches})')
