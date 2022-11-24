@@ -41,11 +41,10 @@ class LazyMRCData(data.Dataset):
     '''
     Class representing an .mrcs stack file -- images loaded on the fly
     '''
-    def __init__(self, mrcfile, norm=None, real_data=True, keepreal=False, invert_data=False, ind=None, window=True, datadir=None, relion31=False, window_r=0.85):
+    def __init__(self, mrcfile, norm=None, real_data=True, keepreal=False, invert_data=False, ind=None,
+                 window=True, datadir=None, relion31=False, window_r=0.85, in_mem=True):
         #assert not keepreal, 'Not implemented error'
         particles = load_particles(mrcfile, True, datadir=datadir, relion31=relion31)
-        if ind is not None:
-            particles = [particles[x] for x in ind]
         N = len(particles)
         ny, nx = particles[0].get().shape
         assert ny == nx, "Images must be square"
@@ -59,7 +58,12 @@ class LazyMRCData(data.Dataset):
         if norm is None:
             norm = self.estimate_normalization()
         self.norm = norm
-        self.window = window_mask(ny, window_r, .99) if window else None
+        #self.window = window_mask(ny, window_r, .99) if window else None
+        self.window = window_cos_mask(ny, window_r, .95) if window else None
+        if in_mem:
+            log('Reading all images into memory!')
+            self.particles = np.asarray([self.particles[i].get() for i in range(0, self.N)])
+        self.in_mem = in_mem
 
     def estimate_normalization(self, n=1000):
         n = min(n,self.N)
@@ -70,13 +74,18 @@ class LazyMRCData(data.Dataset):
         if self.invert_data: imgs *= -1
         if not self.real_data:
             imgs = fft.symmetrize_ht(imgs)
-        print(imgs[0])
+        log('first image: {}'.format(imgs[0]))
         norm = [np.mean(imgs), np.std(imgs)]
-        log('Normalizing HT by {} +/- {}'.format(*norm))
+        if self.real_data:
+            log('Image Mean, Std are {} +/- {}'.format(*norm))
+        else:
+            log('Normalizing HT by {} +/- {}'.format(*norm))
         norm[0] = 0
         return norm
 
     def get(self, i):
+        if self.in_mem:
+            return self.particles[i]
         img = self.particles[i].get()
         if self.window is not None:
             img *= self.window
@@ -88,11 +97,96 @@ class LazyMRCData(data.Dataset):
         img = (img - self.norm[0])/self.norm[1]
         return img
 
+    def get_batch(self, batch):
+        imgs = []
+        for i in range(len(batch)):
+            imgs.append(self.get(batch[i]))
+        return np.concatenate(imgs, axis=0)
+
     def __len__(self):
         return self.N
 
     def __getitem__(self, index):
         return self.get(index), index
+
+class ClassSplitBatchSampler(data.Sampler):
+    def __init__(self, batch_size, poses_ind, split):
+        #self.weights = torch.as_tensor(weights)
+        self.batch_size = batch_size
+        self.poses_ind = poses_ind # list of torch tensors
+        #filter poses_ind not in split
+        poses_ind_new = []
+        for x in self.poses_ind:
+            poses_ind_new.append(x[np.isin(x.numpy(), split.numpy())])
+        self.poses_ind = poses_ind_new
+        self.ns = [(len(x) // self.batch_size)*self.batch_size for x in self.poses_ind]
+
+        self.num_samples = sum(self.ns)
+        print("num_samples: ", self.num_samples)
+
+    def __iter__(self,):
+        current_num_samples = 0
+        current_ind = [0 for _ in self.ns]
+        rand_perms = [torch.randperm(n) for n in self.ns]
+        #print("rand_perms: ", rand_perms)
+        print("ns: ", self.ns)
+        print("current_ind: ", current_ind)
+        for _ in range(self.num_samples//self.batch_size):
+            #rand_tensor = torch.multinomial(self.weights, 1, self.replacement)
+            found = False
+            while not found and current_num_samples < self.num_samples:
+                rand_pose = torch.randint(high=len(self.ns), size=(1,), dtype=torch.int64)
+                if current_ind[rand_pose] < self.ns[rand_pose]:
+                    found = True
+            if found:
+                start = current_ind[rand_pose]
+                current_ind[rand_pose] += self.batch_size
+                current_num_samples += self.batch_size
+
+                sample_ind = rand_perms[rand_pose][start:start + self.batch_size]
+                #indexing poses_ind
+                yield self.poses_ind[rand_pose][sample_ind]
+        print("final_ind: ", current_ind)
+
+    def __len__(self,):
+        return self.num_samples//self.batch_size
+
+class ClassBatchSampler(data.Sampler):
+    def __init__(self, batch_size, poses_ind):
+        #self.weights = torch.as_tensor(weights)
+        self.batch_size = batch_size
+        self.poses_ind = poses_ind # list of torch tensors
+        self.ns = [(len(x) // self.batch_size)*self.batch_size for x in self.poses_ind]
+
+        self.num_samples = sum(self.ns)
+        print("num_samples: ", self.num_samples)
+
+    def __iter__(self,):
+        current_num_samples = 0
+        current_ind = [0 for _ in self.ns]
+        rand_perms = [torch.randperm(n) for n in self.ns]
+        #print("rand_perms: ", rand_perms)
+        print("ns: ", self.ns)
+        print("current_ind: ", current_ind)
+        for _ in range(self.num_samples//self.batch_size):
+            #rand_tensor = torch.multinomial(self.weights, 1, self.replacement)
+            found = False
+            while not found and current_num_samples < self.num_samples:
+                rand_pose = torch.randint(high=len(self.ns), size=(1,), dtype=torch.int64)
+                if current_ind[rand_pose] < self.ns[rand_pose]:
+                    found = True
+            if found:
+                start = current_ind[rand_pose]
+                current_ind[rand_pose] += self.batch_size
+                current_num_samples += self.batch_size
+
+                sample_ind = rand_perms[rand_pose][start:start + self.batch_size]
+                #indexing poses_ind
+                yield self.poses_ind[rand_pose][sample_ind]
+        print("final_ind: ", current_ind)
+
+    def __len__(self,):
+        return self.num_samples//self.batch_size
 
 def window_mask(D, in_rad, out_rad):
     assert D % 2 == 0
@@ -102,16 +196,21 @@ def window_mask(D, in_rad, out_rad):
     mask = np.minimum(1.0, np.maximum(0.0, 1 - (r-in_rad)/(out_rad-in_rad)))
     return mask
 
+def window_cos_mask(D, in_rad, out_rad):
+    assert D % 2 == 0
+    x0, x1 = np.meshgrid(np.linspace(-1, 1, D, endpoint=False, dtype=np.float32),
+                         np.linspace(-1, 1, D, endpoint=False, dtype=np.float32))
+    r = (x0**2 + x1**2)**.5
+    mask = np.minimum(1., np.maximum(0.0, (r-in_rad)/(out_rad - in_rad)))
+    mask = 0.5 + 0.5*np.cos(mask*np.pi)
+    return mask
+
 class VolData(data.Dataset):
     '''
     Class representing an .mrcs stack file
     '''
-    def __init__(self, mrcfile, norm=None, invert_data=False, ind=None, datadir=None, relion31=False, max_threads=16, window_r=0.85):
-        if ind is not None:
-            particles = load_particles(mrcfile, True, datadir=datadir, relion31=relion31)
-            particles = np.array([particles[i].get() for i in ind])
-        else:
-            particles = load_particles(mrcfile, False, datadir=datadir, relion31=relion31)
+    def __init__(self, mrcfile, norm=None, invert_data=False, datadir=None, relion31=False, max_threads=16, window_r=0.85):
+        particles = load_particles(mrcfile, False, datadir=datadir, relion31=relion31)
         N, ny, nx = particles.shape
         assert N == ny == nx, "Images must be cubic"
         assert ny % 2 == 0, "Image size must be even"

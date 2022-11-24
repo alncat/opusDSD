@@ -74,7 +74,6 @@ def add_args(parser):
     group.add_argument('--wd', type=float, default=0, help='Weight decay in Adam optimizer (default: %(default)s)')
     group.add_argument('--lr', type=float, default=1e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
     group.add_argument('--lamb', type=float, default=1, help='penalty for umap prior (default: %(default)s)')
-    group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
     group.add_argument('--beta', default=None, help='Choice of beta schedule or a constant for KLD weight (default: 1/zdim)')
     group.add_argument('--beta-control', type=float, help='KL-Controlled VAE gamma. Beta is KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
@@ -138,7 +137,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                                                                  trans=trans, it=it, enc=enc,
                                                                  args=args, mask=mask,
                                                                  euler=euler,
-                                                                 posetracker=posetracker, data=data)
+                                                                 posetracker=posetracker, data=data, training=update_params)
     if update_params:
         optim.zero_grad()
 
@@ -154,22 +153,22 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
     if use_amp:
         with amp.scale_loss(loss, optim) as scaled_loss:
             scaled_loss.backward()
-    elif update_params:
+    else:
         loss.backward()
     if update_params:
         optim.step()
     return z_mu, loss.item(), gen_loss.item(), kld.item()/args.zdim, losses['l2'].mean().item(), losses['tvl2'].mean().item(), \
             mu2.item()/args.zdim, std2.item()/args.zdim, mmd.item(), c_mmd.item()
 
-def data_augmentation(y, trans, ctf_grid, mask, grid, window_r, downfrac=0.5):
+def data_augmentation(y, trans, ctf_grid, mask, grid, window_r):
     with torch.no_grad():
+        #print(y.shape, trans.shape)
         y_fft = fft.torch_fft2_center(y)
         # undo experimental image translation
-        trans = torch.clamp(trans, min=-1, max=1)
         y_fft = ctf_grid.translate_ft(y_fft, -trans)
 
         # apply b factor
-        b_fact = ctf_grid.get_b_factor(b=.5)
+        b_fact = ctf_grid.get_b_factor(b=1.)
         y_fft *= b_fact
 
         #print(y.shape, y_fft.shape)
@@ -182,8 +181,7 @@ def data_augmentation(y, trans, ctf_grid, mask, grid, window_r, downfrac=0.5):
         #y_fft = utils.mask_image_fft(y, mask, ctf_grid)
         y_fft = fft.torch_fft2_center(y)
 
-        #down_size = (int(y.shape[-1]*0.45)//2)*2
-        down_size = (int(y.shape[-1]*downfrac)//2)*2
+        down_size = (int(y.shape[-1]*0.65)//2)*2
         y_fft_s = torch.fft.fftshift(y_fft, dim=(-2))
         y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
         y_fft = torch.fft.ifftshift(y_fft_crop, dim=(-2))
@@ -209,30 +207,74 @@ def _unparallelize(model):
         return model.module
     return model
 
+def sample_neighbors_multi(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, mask, grid, args, W, out_size):
+    device = euler.get_device()
+    B = euler.shape[0]
+    mus, idices, top_mus, neg_mus = posetracker.sample_neighbors(euler.cpu(), ind.cpu(), num_pose=8)
+    #print(idices.shape, idices, euler.shape, rot.shape)
+    other_euler = posetracker.get_euler(idices).to(device).view(B, -1, 3)
+    #neg_rot = rot[neg_idices].view(B, -1, 3, 3)
+    other_rot, other_tran = posetracker.get_pose(idices)
+    other_rot = other_rot.view(B, -1, 3, 3).to(device)
+    #other_rot = torch.cat([other_rot, neg_rot], dim=1)
+    other_tran = other_tran.to(device).view(B, -1, 2)
+    # get negative samples in current batch
+    # get images
+    other_y = torch.from_numpy(data.get_batch(idices)).to(device).view(B, -1, W, W)
+    other_y, other_y_fft = data_augmentation(other_y, other_tran, ctf_grid, mask, grid, args.window_r)
+    other_ctf = ctf_params[idices]
+    W_x = W//2 + 1
+    o_B = other_ctf.shape[0]
+    other_freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/other_ctf[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
+    #print(other_ctf.shape, other_freqs.shape, euler.shape)
+    other_c = ctf.compute_ctf(other_freqs, *torch.split(other_ctf[:, 1:], 1, 1), bfactor=1).view(B, -1, W, W_x)
+    # put all together
+    others = {"y": other_y, "rots": other_rot, "y_fft": other_y_fft, "ctf": other_c, "euler": other_euler}
+
+    return mus, others, top_mus, neg_mus
+
 def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, mask, grid, args, W, out_size):
     device = euler.get_device()
     B = euler.shape[0]
     mus, idices, top_mus, neg_mus = posetracker.sample_neighbors(euler.cpu(), ind.cpu(), num_pose=8)
-    other_euler = None #posetracker.get_euler(idices).to(device).view(B, -1, 3)
-    other_rot, other_tran = None, None #posetracker.get_pose(idices)
-    other_y, other_y_fft = None, None
-    other_c = None
+    #print(idices.shape, idices, euler.shape, rot.shape)
+    other_euler = posetracker.get_euler(idices).to(device).view(B, 3)
+    #neg_rot = rot[neg_idices].view(B, -1, 3, 3)
+    other_rot, other_tran = posetracker.get_pose(idices)
+    other_rot = other_rot.view(B, 3, 3).to(device)
+    #other_rot = torch.cat([other_rot, neg_rot], dim=1)
+    other_tran = other_tran.to(device).view(B, 2)
+    # get negative samples in current batch
+    # get images
+    other_y = torch.from_numpy(data.get_batch(idices)).to(device).view(B, -1, W, W)
+    other_y, other_y_fft = data_augmentation(other_y, other_tran.unsqueeze(1), ctf_grid, mask, grid, args.window_r)
+    other_ctf = ctf_params[idices]
+    W_x = W//2 + 1
+    o_B = other_ctf.shape[0]
+    other_freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/other_ctf[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
+    #print(other_ctf.shape, other_freqs.shape, euler.shape)
+    other_c = ctf.compute_ctf(other_freqs, *torch.split(other_ctf[:, 1:], 1, 1), bfactor=1).view(B, W, W_x)
+    #print(other_y.shape, other_y_fft.shape, other_c.shape)
+    #neg_c = ctfs[neg_idices].view(B, -1, W, W_x)
+    #other_c = torch.cat([other_c, neg_c], dim = 1)
+    #other_c = torch.fft.fftshift(other_c, dim=-2)
+    #other_c = utils.crop_fft(other_c, out_size)
     # put all together
     others = {"y": other_y, "rots": other_rot, "y_fft": other_y_fft, "ctf": other_c, "euler": other_euler}
-    #print(other_euler.shape, other_tran.shape, other_y.shape, idices.shape)
+
     return mus, others, top_mus, neg_mus
 
 def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
               yr=None, vanilla=True, ctf_grid=None, grid=None, save_image=False,
               group_stat=None, do_scale=True, trans=None, it=None, enc=None,
-              args=None, mask=None, euler=None, posetracker=None, data=None):
+              args=None, mask=None, euler=None, posetracker=None, data=None, training=True):
     use_tilt = yt is not None
     use_ctf = ctf_params is not None
     B = y.size(0)
     D = lattice.D
     W = y.size(-1)
     out_size = D - 1
-    y, y_fft = data_augmentation(y, trans.unsqueeze(1), ctf_grid, mask, grid, args.window_r, downfrac=args.downfrac)
+    y, y_fft = data_augmentation(y, trans.unsqueeze(1), ctf_grid, mask, grid, args.window_r)
     # get real mask
     mask_real = grid.get_circular_mask(args.window_r)
     mask_real = utils.crop_image(mask_real, out_size)
@@ -302,10 +344,17 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         z, encout = model.vanilla_encode(diff, rot, trans, eulers=euler, num_gpus=args.num_gpus)
         # sample nearest neighbors
         posetracker.set_emb(encout["z_mu"], ind)
-        mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
+        mus, others, top_mus, neg_mus = sample_neighbors_multi(posetracker, data, euler, rot,
                                                 ind, ctf_params, ctf_grid, mask, grid, args, W, out_size)
         mus = mus.to(z.get_device())
         neg_mus = neg_mus.to(z.get_device())
+        #print(y.shape, rot.shape, euler.shape, c.shape)
+        if training:
+            y = others["y"]
+            rot = others["rots"]
+            euler = others["euler"]
+            c = others["ctf"]
+        #print(y.shape, rot.shape, euler.shape, c.shape)
         others = None
         #neg_idices = None
         # decode latents
@@ -401,9 +450,12 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
     else:
         top_euler = None
         if C > 1:
-            l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1) + y_recon.unsqueeze(2)**2).sum(dim=(-1, -2)).view(B, -1)
+            #l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1) + y_recon.unsqueeze(2)**2).sum(dim=(-1, -2)).view(B, -1)
+            l2_diff = (-2.*y_recon*y + y_recon**2).sum(dim=(-1, -2)).view(B, -1)
+            std = torch.std(l2_diff.detach())
             #print(y_recon.shape, y.shape, l2_diff.shape, mask_sum.shape)
-            probs = F.softmax(-l2_diff.detach()*0.5, dim=-1).detach()
+            probs = F.softmax(-l2_diff.detach()*0.5/std, dim=-1).detach()
+            #print(probs, l2_diff)
             #get argmax
             #inds = torch.argmax(probs, dim=-1, keepdim=True)
             #inds = inds.unsqueeze(-1).repeat(1, 1, 3)
@@ -412,8 +464,8 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
             #top_euler = torch.gather(euler_samples, 1, inds).squeeze(1).cpu()
             #print(top_euler)
             #print(probs, euler_samples)
-            #print(probs)
-            em_l2_loss = ((l2_diff*probs/mask_sum).sum(-1)).mean()
+            #print(((l2_diff*probs).sum(-1)/mask_sum).shape, mask_sum.shape)
+            em_l2_loss = ((l2_diff*probs)/mask_sum).sum(-1).mean()
             #print(em_l2_loss)
         else:
             em_l2_loss = (-2.*y_recon*y + y_recon**2).sum(dim=(-1,-2))
@@ -462,8 +514,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
             lamb = args.lamb #.5 #10 1 0.02
             eps = 1e-3
             kld, mu2 = utils.compute_kld(z_mu, z_logstd)
-            cross_corr = utils.compute_cross_corr(z_mu)
-            loss = gen_loss + beta_control*beta*(kld)/mask_sum + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
+            loss = gen_loss + beta_control*beta*(kld)/mask_sum + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum*0.5)
             #loss = loss + 2.*pairKLD/(B*B*C*mask_sum)*alpha
             # compute mmd
             #mmd = utils.compute_smmd(z_mu, z_logstd, s=.5)
@@ -492,9 +543,9 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
             mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
             mmd = mmd.mean()
             #print("c_mmd: ", c_mmd, "mmd: ", mmd)
-            loss += lamb*(c_mmd + mmd + cross_corr)*beta/mask_sum
+            loss += lamb*(c_mmd + mmd)*beta/mask_sum
             if "knn" in losses:
-                loss += lamb*losses["knn"]*beta/mask_sum
+                loss += 0.25*lamb*losses["knn"]*beta/mask_sum
             loss = loss/(1 + lamb*beta)
             #print(mmd)
 
@@ -504,7 +555,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
             #print(logvar_diff.mean().detach(), z_mu_diff2.mean().detach(), var_diff.mean().detach())
             plt.show()
 
-    return loss, gen_loss, losses["knn"], mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler
+    return loss, gen_loss, losses["knn"], mu2.mean(), std2.mean(), mmd, c_mmd, top_euler
 
 def eval_z(model, lattice, data, batch_size, device, trans=None, use_tilt=False, ctf_params=None, use_real=False):
     assert not model.training
@@ -766,8 +817,7 @@ def main(args):
                 template_type=args.template_type, warp_type=args.warp_type,
                 num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=ctf_grid,
-                deform_emb_size=args.deform_size,
-                downfrac=args.downfrac)
+                deform_emb_size=args.deform_size)
 
 
     flog(model)
@@ -892,8 +942,8 @@ def main(args):
     val_sampler = dataset.ClassSplitBatchSampler(args.batch_size, posetracker.poses_ind, val_split)
     data_generator = DataLoader(data, batch_sampler=train_sampler)
     val_data_generator = DataLoader(data, batch_sampler=val_sampler)
-
-    log(f'image will be downsampled to {args.downfrac} of original size {D-1}')
+    #filter poses indicies in posetracker, only keep indicies in training set
+    posetracker.filter_poses_ind(train_split)
 
     # learning rate scheduler
     # training loop
@@ -992,9 +1042,9 @@ def main(args):
                 out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
                 log('save {}'.format(out_z))
                 posetracker.save_emb(out_z)
-                #out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
-                #log('save {}'.format(out_pose))
-                #posetracker.save(out_pose)
+                out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
+                log('save {}'.format(out_pose))
+                posetracker.save(out_pose)
 
         flog('# =====> Epoch: {} Average training gen_loss = {:.6}, KLD = {:.6f}, '\
              'total loss = {:.6f}; Finished in {}'.format(epoch+1,

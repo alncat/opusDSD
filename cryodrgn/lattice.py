@@ -10,27 +10,195 @@ from . import utils
 
 log = utils.log
 class CTFGrid:
-    def __init__(self, D):
+    def __init__(self, D, device, center=False, vol_size=None):
         self.vol_size = D - 1
+        assert self.vol_size >= 4, "volume size {} is smaller than 4".format(self.vol_size)
         self.x_size = self.vol_size//2 + 1
-        x_idx = torch.arange(self.x_size)/float(self.vol_size) #(0, 0.5]
-        y_idx = torch.arange(-self.x_size+2, self.x_size)/float(self.vol_size) #(-0.5, 0.5]
-        grid  = torch.meshgrid(y_idx, x_idx)
-        grid_x = grid[1] #change fast [[0,1,2,3]]
-        grid_y = torch.roll(grid[0], shifts=(self.x_size), dims=(0)) #fft shifted, center at the corner
-        self.freqs2d = torch.stack((grid_x, grid_y), dim=-1)
-        print("ctf grid shape: ", self.freqs2d.shape)
-        print("ctf grid: ", self.freqs2d)
+        x_idx = torch.arange(self.x_size).to(device)/float(self.vol_size) #(0, 0.5]
+        if not center:
+            y_idx = torch.arange(-self.x_size+2, self.x_size).to(device)/float(self.vol_size) #(-0.5, 0.5]
+            grid  = torch.meshgrid(y_idx, x_idx, indexing='ij')
+            grid_x = grid[1] #change fast [[0,1,2,3]]
+            grid_y = torch.roll(grid[0], shifts=(self.x_size), dims=(0)) #fft shifted, center at the corner
+            self.freqs2d = torch.stack((grid_x, grid_y), dim=-1)
+        else:
+            y_idx = torch.arange(-self.x_size+1, self.x_size-1).to(device)/float(self.vol_size)
+            grid = torch.meshgrid(y_idx, x_idx, indexing='ij')
+            self.freqs2d = torch.stack((grid[1], grid[0]), dim=-1)
+        #print("ctf grid: ", self.freqs2d)
         self.D = D - 1
+        self.device = device
         # flatten to 2d
         #self.freqs2d = self.freqs2d.view((-1,2))
+        self.circular_masks = {}
+        self.shells_index = torch.round(torch.sqrt(torch.sum((self.freqs2d * self.vol_size) ** 2, dim=-1)))
+        self.shells_index = self.shells_index.type(torch.int64)
+        self.max_r = self.shells_index.max()
+        log("creating ctf grid {} with grid {}".format(center, self.shells_index))
+        shells_index_val = self.shell_to_grid(torch.arange(self.vol_size).unsqueeze(0).to(device))
+        print((shells_index_val - self.shells_index).sum())
+
+        log("created ctf grid with shape: {}, max_r: {}".format(self.freqs2d.shape, self.max_r))
+        #get number of frequencies per shell
+        self.shells_weight = torch.ones_like(self.shells_index, dtype=torch.float32)
+
+        self.shells_weight[:, 0] = 0.5
+        if self.vol_size % 2 == 0:
+            self.shells_weight[:, self.x_size - 1] = 0.5
+        #self.shells_weight[0, 0] = 1.
+
+        self.shells_count = self.get_shell_sum(self.shells_weight)
+        #print(self.shells_count)
+        #self.shells_count = self.shells_count.float()
+        shell_count_validate = self.get_shell_count()
+        assert torch.sum(self.shells_count.cpu() - shell_count_validate.cpu()).detach().cpu().numpy() == 0.
+        self.s2 = self.freqs2d.pow(2).sum(-1)
+        self.shells_s2 = self.get_shell_s2()
+
+    def get_cos_mask(self, L, L_out):
+        assert L < self.x_size, "L cannot be larger than {}".format(self.x_size)
+        assert L < L_out, "L cannot be larger than {}".format(L_out)
+        if L in self.circular_masks:
+            return self.circular_masks[L]
+        in_rad = L/self.vol_size
+        out_rad = L_out/self.vol_size
+        r = self.freqs2d.pow(2).sum(-1).sqrt()
+        r = (r - in_rad)/(out_rad - in_rad)
+        mask = torch.clip(r, min=0., max=1.)
+        mask = torch.cos(mask*np.pi)*0.5 + 0.5
+        self.circular_masks[L] = mask
+        print(mask)
+        return mask
+
+    def get_circular_mask(self, L):
+        assert L < self.x_size, "L cannot be larger than {}".format(self.x_size)
+        if L in self.circular_masks:
+            return self.circular_masks[L]
+        mask = self.freqs2d.pow(2).sum(-1) < L*L/float(self.vol_size**2)
+        mask = mask.float()
+        print(mask)
+        #mask = self.grid[..., 0]*self.grid[..., 0] + \
+        #    self.grid[..., 1]*self.grid[..., 1] < L*L
+        self.circular_masks[L] = mask
+        return mask
+
+    def get_shell_s2(self):
+        radius = self.s2
+        avg_radius = self.get_shell_sum(radius*self.shells_weight)/(self.shells_count + 1e-5)
+        #avg_radius = torch.sqrt(avg_radius)
+        return avg_radius
+
+    def get_shell_sum(self, src):
+        target = torch.zeros_like(src)
+
+        #print(src.shape, self.shells_index.shape)
+        if len(src.shape) == len(self.shells_index.shape) + 2:
+            if src.is_cuda:
+                batch_shells_index = self.shells_index.repeat((src.shape[0], src.shape[1], 1, 1)).to(src.get_device())
+            else:
+                batch_shells_index = self.shells_index.repeat((src.shape[0], src.shape[1], 1, 1))
+            target_shells = torch.scatter_add(target, dim=-2, index=batch_shells_index, src=src)
+
+        elif len(src.shape) == len(self.shells_index.shape) + 1:
+            if src.is_cuda:
+                batch_shells_index = self.shells_index.repeat((src.shape[0], 1, 1)).to(src.get_device())
+            else:
+                batch_shells_index = self.shells_index.repeat((src.shape[0], 1, 1))
+            target_shells = torch.scatter_add(target, dim=-2, index=batch_shells_index, src=src)
+
+        elif len(src.shape) == len(self.shells_index.shape):
+            target_shells = torch.scatter_add(target, dim=-2, index=self.shells_index, src=src)
+        else:
+            log("shapes do not match {} {}".format(src.shape, self.shells_index.shape))
+            raise RuntimeError
+        target_shells = torch.sum(target_shells, dim=-1)
+        return target_shells
+
+    def get_shell_count(self):
+        shell_count = torch.zeros((self.vol_size,)).to(self.device)
+        for i in range(self.shells_index.shape[0]):
+            for j in range(self.shells_index.shape[1]):
+                shell_count[self.shells_index[i][j]] += self.shells_weight[i, j]
+        return shell_count
+
+    def shell_to_grid(self, x):
+        B = x.shape[0]
+        x_grid = x.unsqueeze(-1).repeat(1, 1, self.x_size)
+        index = self.shells_index.repeat((B, 1, 1))
+        x_grid = torch.gather(x_grid, 1, index)
+        return x_grid
+
+    def translation_grid(self, t):
+        coords = self.freqs2d.to(t.get_device()) #(H, W, 2)
+        #img = img # Bxhxw
+        t = t.unsqueeze(-2).unsqueeze(-1) # Bxkx1x2x1 to be able to do bmm
+        tfilt = coords @ t * 2 * np.pi # BxkxHxWx1
+        tfilt = tfilt.squeeze(-1) # BxkxHxW
+        #print(coords.shape, t.shape, tfilt.shape)
+        c = torch.cos(tfilt) # BxkxHxW
+        s = torch.sin(tfilt) # BxkxHxN
+        phase_shift = torch.view_as_complex(torch.stack([c, s], -1))
+        return phase_shift
+
+    def get_b_factor(self, b=1.):
+        s2 = self.s2
+        bfactor = torch.exp(-b/4*s2*4* np.pi**2)
+        return bfactor
+
+    def sample_local_translation(self, img, k, sigma):
+        assert k > 0
+        t = torch.randn((img.shape[0], k, 2))*sigma
+        #t = torch.cat((torch.zeros(1, 2), t), dim=0)
+        coords = self.freqs2d.to(img.get_device()) #(H, W, 2)
+        #img = img # Bxhxw
+        t = t.to(img.get_device())
+        t = t.unsqueeze(-2).unsqueeze(-1) # BxCx1x2x1 to be able to do bmm
+        tfilt = coords @ t * 2 * np.pi # BxCxHxWx1
+        tfilt = tfilt.squeeze(-1) # BxCxHxW
+        #print(coords.shape, t.shape, tfilt.shape)
+        c = torch.cos(tfilt) # BxHxW
+        s = torch.sin(tfilt) # BxHxN
+        phase_shift = torch.view_as_complex(torch.stack([c, s], -1))
+        #print(t.shape, img.shape, phase_shift.shape)
+        return img*phase_shift
+
+    def translate_ft(self, img, t):
+        '''
+        Translate an image by phase shifting its Fourier transform
+
+        Inputs:
+            img: FT of image (B x img_dims x 2)
+            t: shift in pixels (B x T x 2)
+            mask: Mask for lattice coords (img_dims x 1)
+
+        Returns:
+            Shifted images (B x T x img_dims x 2)
+
+        img_dims can either be 2D or 1D (unraveled image)
+        '''
+        # F'(k) = exp(-2*pi*k*x0)*F(k)
+        coords = self.freqs2d.to(img.get_device()) #(H, W, 2)
+        # img = img # Bxhxw
+        t = t.to(img.get_device())
+        t = t.unsqueeze(-2).unsqueeze(-1) # BxCx1x2x1 to be able to do bmm
+        tfilt = coords @ t * 2 * np.pi # BxCxHxWx1
+        tfilt = tfilt.squeeze(-1) # BxCxHxW
+        #print(coords.shape, t.shape, tfilt.shape)
+        c = torch.cos(tfilt) # BxHxW
+        s = torch.sin(tfilt) # BxHxN
+        phase_shift = torch.view_as_complex(torch.stack([c, s], -1))#.unsqueeze(1)
+        #phase_shift = phase_shift.to(img.get_device())
+        #print(t.shape, img.shape, phase_shift.shape)
+        return (img*phase_shift)
+
 
 class Grid:
-    def __init__(self, D):
+    def __init__(self, D, device):
         print("initializing 2d grid of size ", D - 1)
         self.vol_size = D - 1
         self.x_size = self.vol_size//2 + 1
-        x_idx = torch.arange(0, self.vol_size, dtype=torch.float32)
+        #x_idx = torch.arange(0, self.vol_size, dtype=torch.float32)
+        x_idx = torch.linspace(-1., 1., self.vol_size, dtype=torch.float32).to(device)
         grids = torch.meshgrid(x_idx, x_idx)
         #grids[1], (0, ..., vol)
         self.grid = torch.stack((grids[1], grids[0]), dim=-1)
@@ -41,7 +209,7 @@ class Grid:
     def translate(self, images, trans):
         # trans (,2)
         #print(images.shape, self.grid.shape, trans.shape)
-        print(trans)
+        #print(trans)
         #f, axes = plt.subplots(1, 2)
         #utils.plot_image(axes, images[0,...].detach().numpy(), 0)
 
@@ -53,7 +221,7 @@ class Grid:
         translated = F.grid_sample(images.unsqueeze(1), grid_t)
         #utils.plot_image(axes, translated[0,0,...].detach().numpy() - images[0,...].detach().numpy(), 1)
         #plt.show()
-        return translated
+        return translated.squeeze(1)
 
     def get_square_mask(self, L):
         if L in self.square_masks:
@@ -72,13 +240,18 @@ class Grid:
         self.square_masks[L] = mask
         return mask
 
-    def get_circular_mask(self, L):
+    def get_circular_mask(self, in_rad, s=1., out_rad=0.95):
+        in_rad *= s
+        out_rad *= s
+        L = int(in_rad*self.vol_size)
         if L in self.circular_masks:
             return self.circular_masks[L]
-        mask = self.grid.pow(2).sum(-1) < L*L
-        #mask = self.grid[..., 0]*self.grid[..., 0] + \
-        #    self.grid[..., 1]*self.grid[..., 1] < L*L
+        r = self.grid.pow(2).sum(-1).sqrt()
+        r = (r - in_rad)/(out_rad - in_rad)
+        mask = torch.clip(r, min=0., max=1.)
+        mask = torch.cos(mask*np.pi)*0.5 + 0.5
         self.circular_masks[L] = mask
+        #print(mask)
         return mask
 
 

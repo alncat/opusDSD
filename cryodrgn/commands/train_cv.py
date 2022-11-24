@@ -148,7 +148,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                                         losses=losses, args=args, it=it, y_ffts=y_ffts, zs=z,
                                         mus=mus, neg_mus=neg_mus, y_recon_ori=y_recon_ori, euler_samples=euler_samples)
 
-    if top_euler is not None and update_params:
+    if top_euler is not None and not update_params:
         posetracker.set_euler(top_euler, ind)
 
     if use_amp:
@@ -165,11 +165,13 @@ def data_augmentation(y, trans, ctf_grid, mask, grid, window_r, downfrac=0.5):
     with torch.no_grad():
         y_fft = fft.torch_fft2_center(y)
         # undo experimental image translation
-        trans = torch.clamp(trans, min=-1, max=1)
+        #print(trans)
+        #trans = torch.clamp(trans, min=-8, max=8)
+        #print(trans)
         y_fft = ctf_grid.translate_ft(y_fft, -trans)
 
         # apply b factor
-        b_fact = ctf_grid.get_b_factor(b=.5)
+        b_fact = ctf_grid.get_b_factor(b=.25)
         y_fft *= b_fact
 
         #print(y.shape, y_fft.shape)
@@ -182,7 +184,6 @@ def data_augmentation(y, trans, ctf_grid, mask, grid, window_r, downfrac=0.5):
         #y_fft = utils.mask_image_fft(y, mask, ctf_grid)
         y_fft = fft.torch_fft2_center(y)
 
-        #down_size = (int(y.shape[-1]*0.45)//2)*2
         down_size = (int(y.shape[-1]*downfrac)//2)*2
         y_fft_s = torch.fft.fftshift(y_fft, dim=(-2))
         y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
@@ -245,7 +246,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             # ctf_params[:,0] is the angpix
             ctf_param = ctf_params[ind]
             freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/ctf_params[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
-            c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=1).view(B,D-1,-1) #(B, )
+            c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=4).view(B,D-1,-1) #(B, )
 
     # encode
     if not vanilla:
@@ -300,6 +301,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         #c = utils.crop_fft(c, out_size)
         # encode images to latents
         z, encout = model.vanilla_encode(diff, rot, trans, eulers=euler, num_gpus=args.num_gpus)
+        #print(z - encout['z_mu'])
         # sample nearest neighbors
         posetracker.set_emb(encout["z_mu"], ind)
         mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
@@ -308,6 +310,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         neg_mus = neg_mus.to(z.get_device())
         others = None
         #neg_idices = None
+        # mix knns
         # decode latents
         decout = model.vanilla_decode(rot, trans, z=z, save_mrc=save_image, eulers=euler,
                                       ref_fft=y, ctf=c, encout=encout, others=others, mask=mask_real)
@@ -329,7 +332,6 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         # retrieve mask
         mask = decout["mask"]
         mask_sum = decout["mask"].sum(dim=(-1,-2))
-        #mask_sum = decout["mask"]
         # retrieve nearest neighbor in the same batch
         z_nn = encout["z_knn"]
         diff = (z_mu.unsqueeze(1) - z_nn).pow(2).sum(-1)
@@ -352,7 +354,8 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
                 #utils.plot_image(axes, y_recon_ori[d_i,d_k,...].detach().cpu().numpy(), d_j, 0, log=True)
                 #print(encout["rotated_x"].shape)
                 #utils.plot_image(axes, encout["rotated_x"][0,...].detach().cpu().numpy(), 0, 0, log=True)
-                utils.plot_image(axes, encout["rotated_x"][1,...].detach().cpu().numpy(), d_j, 0, log=True)
+                utils.plot_image(axes, encout["rotated_x"][d_i,...].detach().cpu().numpy(), d_j, 0, log=True)
+                utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
                 #utils.plot_image(axes, y[d_i,...].detach().numpy(), 1)
                 #log("correlations w.o. mask: {}".format(correlations.detach().cpu().numpy()))
 
@@ -369,7 +372,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             if plot:
                 utils.plot_image(axes, y_recon[0,0,...].detach().cpu().numpy(), 0, 1)
                 utils.plot_image(axes, y_recon[d_i,d_k,...].detach().cpu().numpy(), d_j, 1)
-                utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
+                #utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
                 utils.plot_image(axes, y_ref[0,0,...].detach().cpu().numpy(), 0, 2)
 
                 correlations = F.cosine_similarity(y_recon[:,d_k,:].view(B,-1), y_ref[:,d_k,...].view(B,-1))
@@ -405,14 +408,22 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
             #print(y_recon.shape, y.shape, l2_diff.shape, mask_sum.shape)
             probs = F.softmax(-l2_diff.detach()*0.5, dim=-1).detach()
             #get argmax
-            #inds = torch.argmax(probs, dim=-1, keepdim=True)
-            #inds = inds.unsqueeze(-1).repeat(1, 1, 3)
+            inds = torch.argmax(probs, dim=-1, keepdim=True)
+            inds = inds.unsqueeze(-1).repeat(1, 1, 3)
             #get euler
             #print(inds, euler_samples)
-            #top_euler = torch.gather(euler_samples, 1, inds).squeeze(1).cpu()
+            top_euler = torch.gather(euler_samples, 1, inds).squeeze(1).cpu()
+
+            #get k argmax
+            #inds_ret = torch.topk(probs, 16, dim=-1)
+            #inds = inds_ret.indices
+            #vals = inds_ret.values
+            #l2_diff_top_k = torch.gather(l2_diff, 1, inds)
+            #em_l2_loss = ((l2_diff_top_k*vals/mask_sum).sum(-1)).mean()
+            #print(vals, inds, l2_diff_top_k, em_l2_loss, euler_samples)
+
             #print(top_euler)
             #print(probs, euler_samples)
-            #print(probs)
             em_l2_loss = ((l2_diff*probs/mask_sum).sum(-1)).mean()
             #print(em_l2_loss)
         else:
@@ -492,10 +503,10 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
             mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
             mmd = mmd.mean()
             #print("c_mmd: ", c_mmd, "mmd: ", mmd)
-            loss += lamb*(c_mmd + mmd + cross_corr)*beta/mask_sum
+            loss += lamb*(c_mmd + mmd + 0.5*cross_corr)*beta/mask_sum
             if "knn" in losses:
                 loss += lamb*losses["knn"]*beta/mask_sum
-            loss = loss/(1 + lamb*beta)
+            #loss = loss/(1 + lamb*beta)
             #print(mmd)
 
     if it % (args.log_interval*8) == B and args.plot:
@@ -553,7 +564,7 @@ def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
     # save z
     if vanilla:
         posetracker.save_emb(out_z)
-        #posetracker.save(out_pose)
+        posetracker.save(out_pose)
     if not vanilla:
         with open(out_z,'wb') as f:
             pickle.dump(z_mu, f)
@@ -571,7 +582,8 @@ def save_config(args, dataset, lattice, model, out_config):
                         ctf=args.ctf,
                         poses=args.poses,
                         do_pose_sgd=args.do_pose_sgd,
-                        real_data=args.real_data)
+                        real_data=args.real_data,
+                        downfrac=args.downfrac)
     if args.tilt is not None:
         dataset_args['particles_tilt'] = args.tilt
     lattice_args = dict(D=lattice.D,
@@ -588,7 +600,9 @@ def save_config(args, dataset, lattice, model, out_config):
                       pe_dim=args.pe_dim,
                       domain=args.domain,
                       activation=args.activation,
-                      template_type=args.template_type)
+                      template_type=args.template_type,
+                      down_vol_size=model.down_vol_size,
+                      Apix=model.decoder.Apix)
     config = dict(dataset_args=dataset_args,
                   lattice_args=lattice_args,
                   model_args=model_args)
@@ -659,6 +673,10 @@ def main(args):
     if args.ref_vol is not None:
         flog(f'Loading reference volume from {args.ref_vol}')
         ref_vol = dataset.VolData(args.ref_vol).get()
+
+        #flog(f'Loading fixed mask from {args.ref_vol}')
+        #mask_vol = dataset.VolData(args.ref_vol).get()
+
     else:
         ref_vol = None
     flog(f'Loading dataset from {args.particles}')
@@ -725,6 +743,7 @@ def main(args):
         #    raise NotImplementedError("Not implemented with real-space encoder. Use phase-flipped images instead")
         flog('Loading ctf params from {}'.format(args.ctf))
         ctf_params = ctf.load_ctf_for_training(D-1, args.ctf)
+        log('first ctf params is: {}'.format(ctf_params[0,:]))
         if args.ind is not None: ctf_params = ctf_params[ind]
         assert ctf_params.shape == (Nimg, 8)
         ctf_params = torch.tensor(ctf_params).to(device)
@@ -762,7 +781,7 @@ def main(args):
     model = HetOnlyVAE(lattice, args.qlayers, args.qdim, args.players, args.pdim,
                 in_dim, args.zdim, encode_mode=args.encode_mode, enc_mask=enc_mask,
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
-                activation=activation, ref_vol=ref_vol, Apix=ctf_params[0,1],
+                activation=activation, ref_vol=ref_vol, Apix=ctf_params[0,0],
                 template_type=args.template_type, warp_type=args.warp_type,
                 num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=ctf_grid,
@@ -800,7 +819,7 @@ def main(args):
     #                                 0.5 * (math.cos((epoch - warm_up_epochs)/(max_num_epochs - warm_up_epochs) * \
     #                                                 math.pi) + 1.)
     #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lr_lambda=warm_up_with_cosine_lr)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, 1, gamma=0.95)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, 1, gamma=0.97)
 
     # Mixed precision training with AMP
     if args.amp:
@@ -952,7 +971,7 @@ def main(args):
                                               save_image=save_image, group_stat=group_stat,
                                               it=batch_it, enc=None,
                                               args=args, euler=euler,
-                                              posetracker=posetracker, data=data, update_params=(update_it % 1) == 0)
+                                              posetracker=posetracker, data=data, update_params=True)#((epoch - start_epoch)%2 != 1))
             update_it += 1
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
@@ -992,9 +1011,9 @@ def main(args):
                 out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
                 log('save {}'.format(out_z))
                 posetracker.save_emb(out_z)
-                #out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
-                #log('save {}'.format(out_pose))
-                #posetracker.save(out_pose)
+                out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
+                log('save {}'.format(out_pose))
+                posetracker.save(out_pose)
 
         flog('# =====> Epoch: {} Average training gen_loss = {:.6}, KLD = {:.6f}, '\
              'total loss = {:.6f}; Finished in {}'.format(epoch+1,

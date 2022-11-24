@@ -1,15 +1,34 @@
 import numpy as np
 import torch.fft
+MODE=None
+
+def torch_fft3_center(img):
+    img_centered = torch.fft.fftshift(img, dim=(-3, -2, -1))
+    fft_img = torch.fft.fftn(img_centered, dim=(-3, -2, -1))
+    fft_img_centered = torch.fft.fftshift(fft_img, dim=(-3, -2, -1))
+    return fft_img_centered
+
+def torch_rfft3_center(img):
+    img_centered = torch.fft.fftshift(img, dim=(-3, -2, -1))
+    fft_img = torch.fft.rfftn(img_centered, dim=(-3, -2, -1), norm=MODE)
+    fft_img_centered = torch.fft.fftshift(fft_img, dim=(-3, -2))
+    return fft_img_centered
+
+def torch_irfft3_center(fft_img_centered):
+    fft_img = torch.fft.ifftshift(fft_img_centered, dim=(-3, -2))
+    img_centered = torch.fft.irfftn(fft_img, dim=(-3, -2, -1), norm=MODE)
+    img = torch.fft.ifftshift(img_centered, dim=(-3, -2, -1))
+    return img
 
 def torch_fft2_center(img):
     img_centered= torch.fft.fftshift(img, dim=(-2, -1))
-    fft_img = torch.fft.rfft2(img_centered, dim=(-2, -1))
+    fft_img = torch.fft.rfft2(img_centered, dim=(-2, -1), norm=MODE)
     return fft_img
 
 def torch_ifft2_center(fft_img):
-    img = torch.fft.irfft2(fft_img, dim=(-2, -1))
-    img_centered = torch.fft.fftshift(img, dim=(-2, -1))
-    return img_centered
+    img_centered = torch.fft.irfft2(fft_img, dim=(-2, -1), norm=MODE)
+    img = torch.fft.ifftshift(img_centered, dim=(-2, -1))
+    return img
 
 def fft2_center(img):
     return np.fft.fftshift(np.fft.fft2(np.fft.fftshift(img,axes=(-1,-2))),axes=(-1,-2))

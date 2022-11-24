@@ -161,7 +161,7 @@ def parse_mrc(fname, lazy=False):
     else:
         stride = dtype().itemsize*ny*nx
         array = [LazyImage(fname, (ny, nx), dtype, start+i*stride) for i in range(nz)]
-    print(header)
+    #print(header)
     return array, header
 
 def write(fname, array, header=None, Apix=1., xorg=0., yorg=0., zorg=0., is_vol=None):

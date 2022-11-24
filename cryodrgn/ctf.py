@@ -35,7 +35,7 @@ def compute_ctf(freqs, dfu, dfv, dfang, volt, cs, w, phase_shift=0, bfactor=None
     gamma = 2*np.pi*(-.5*df*lam*s2 + .25*cs*lam**3*s2**2) - phase_shift
     ctf = (1-w**2)**.5*torch.sin(gamma) - w*torch.cos(gamma)
     if bfactor is not None:
-        ctf *= torch.exp(-bfactor/4*s2)
+        ctf *= torch.exp(-bfactor/4*s2 * 4*np.pi**2)
     return -ctf
 
 def compute_ctf_np(freqs, dfu, dfv, dfang, volt, cs, w, phase_shift=0, bfactor=None):
@@ -105,5 +105,7 @@ def load_ctf_for_training(D, ctf_params_pkl):
     # Slice out the first column (D)
     return ctf_params[:,1:]
 
-
+def load_group_for_training(group_pkl):
+    group = utils.load_pkl(group_pkl)
+    return group
 

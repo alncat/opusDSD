@@ -57,7 +57,7 @@ def main(args):
     # write output
     log(f'Writing {args.o}')
     with open(args.o,'wb') as f:
-        pickle.dump((rot,trans),f)
+        pickle.dump((rot,trans,euler),f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
