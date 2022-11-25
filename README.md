@@ -57,7 +57,7 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --split hrd-split.pkl
 ```
 
 The meaning of each argument is explained as follows:
@@ -71,18 +71,19 @@ The meaning of each argument is explained as follows:
 - lr, the initial learning rate for adam optimizer, 1.e-4 should work
 - num-gpus, the number of gpus used for training, note that the total number of images in the total batch will be n*num-gpus
 - multigpu, toggle on the data parallel version
-- beta-control, the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint
+- beta-control, the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint. You should use small beta control for low SNR dataset like cryo-EM instead of beta = 1 in beta-vae, possible ranges are [0.01-0.05]. Suitable beta-control might help disentanglement by increasing the magnitude of latent encodings, for more details, check out beta vae paper, https://openreview.net/forum?id=Sy2fzU9gl
 - beta, the schedule for restraint stengths, cos implements the cyclic annealing schedule as in https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/
 - o, the directory name for storing results, such as model weights, latent encodings
 - r, the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask
 - downfrac, the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D*downfraco
 - lamb, the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields suprious result.
 - log-interval, the logging interval, the program will output some statistics after the specified steps
+- split, the filename for storing the train-validation split of images
 
 To restart execution from a checkpoint, you can use
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/output -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/output -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl
 ```
 
 - load, the weight checkpoint from the restarting epoch
@@ -90,7 +91,7 @@ python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-p
 
 boths are in the output directory
 
-During training, opus-DSD will output temporary volumes called ```refx*.mrc```, you can check out the intermediate result by looking at them. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. It's training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images.
+During training, opus-DSD will output temporary volumes called ```refx*.mrc```, you can check out the intermediate result by looking at them. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
 
 # analyze result
 The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz .
