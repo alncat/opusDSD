@@ -45,6 +45,7 @@ a file named 'hrd.txt' which contains
 ```
 /work/hrd.mrcs
 ```
+Opus-DSD will read image stacks from the specified path.
 
 Finally, you should create a mask using the consensus model and RELION as in the traditional postprocess. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
@@ -67,7 +68,7 @@ The meaning of each argument is explained as follows:
 - group, ctf groups of the image stack
 - b, the number of images for each batch on each gpu
 - zdim, the dimension of latent encodings
-- lr, the learning rate for adam optimizer
+- lr, the initial learning rate for adam optimizer, 1.e-4 should work
 - num-gpus, the number of gpus used for training, note that the total number of images in the total batch will be n*num-gpus
 - multigpu, toggle on the data parallel version
 - beta-control, the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint
@@ -116,6 +117,9 @@ sh eval_vol.sh /work/hrd/ 12 10 1 8
 - the fourth argument is apix (which actually will be ignored, it is a dummy variable!!)
 - the final argument is the dimension of latent space
 
+change to ```/work/hrd/analyze.12/kmeans10``` to checkout the reference*.mrc, which are the reconstructions
+correspondings to the cluster centroids.
+
 Finally, you can also retrieve the star files for images in each cluster using
 
 ```
@@ -128,3 +132,5 @@ sh parse_pose.sh run_data.star 1.4 192 /work/hrd/ 12 10
 - The fourth arugment is the output directory used in training
 - The fifth argument is the number of epoch you just analyzed
 - The final argument is the number of kmeans clusters you used in analysis
+
+change to ```/work/hrd/analyze.12/kmeans10``` to checkout the starfile for images in each cluster.
