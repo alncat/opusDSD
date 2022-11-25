@@ -25,14 +25,18 @@ You can then prepare the pose parameter file by executing the below command insi
 ```
 python -m cryodrgn.commands.parse_pose_star /work/run_data.star -D 192 --Apix 1.4 -o hrd-pose-euler.pkl
 ```
-suppose the run_data.star is located at ```/work/``` directory, where D is the dimension of your dataset, Apix is the angstrom per pixel of you dataset, o is followed by the filename of pose parameter used by our program.
+suppose the run_data.star is located at ```/work/``` directory, where
+- D is the dimension of your dataset,
+- Apix is the angstrom per pixel of you dataset,
+- o is followed by the filename of pose parameter used by our program.
 
 Next, you can prepare the ctf parameter file by executing:
 
 ```
 python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.4 -o hrd-ctf.pkl -o-g mtr-grp.pkl --ps 0
 ```
-o-g is used to specify the filename of ctf groups of your dataset. ps is used to specify the amount of phaseshift in the dataset.
+- o-g is used to specify the filename of ctf groups of your dataset.
+- ps is used to specify the amount of phaseshift in the dataset.
 
 Thirdly, you should put the path of image stack in a txt file, e.g.,
 
@@ -59,7 +63,7 @@ The meaning of each argument is explained as follows:
 
 - ctf, ctf parameters of the image stack
 - poses, pose parameters of the image stack
-- n, the number of trainning epoches, each training epoch uses the whole image stack
+- n, the number of training epoches, each training epoch uses the whole image stack
 - group, ctf groups of the image stack
 - b, the number of images for each batch on each gpu
 - zdim, the dimension of latent encodings
@@ -87,10 +91,10 @@ clone it and change to the directory contains cryoViz
 sh analyze.sh /work/hrd 12 /work/opus-DSD/hrd-pose-euler.pkl 10
 ```
 
-The first argument after analyze.sh is the output directory used in training,
-the second argument is the number of epoch you would like to analyze,
-the third argument is the pose parameter you created before,
-the final argument is the number of clusters for kmeans clustering.
+- The first argument after analyze.sh is the output directory used in training,
+- the second argument is the number of epoch you would like to analyze,
+- the third argument is the pose parameter you created before,
+- the final argument is the number of clusters for kmeans clustering.
 
 The analysis result will be stored in /work/hrd/analyze.12 for this example.
 
@@ -100,11 +104,11 @@ You can generate the volumes of each cluster centroids using
 sh eval_vol.sh /work/hrd/ 12 10 1 8
 ```
 
-The first argument after eval_vol.sh is the output directory used in training,
-the second argument is the number of epoch you just analyzed
-the third argument is the number of kmeans clusters you used in analysis
-the fourth argument is apix (which actually will be ignored, it is a dummy variable!!)
-the final argument is the dimension of latent space
+- The first argument after eval_vol.sh is the output directory used in training,
+- the second argument is the number of epoch you just analyzed
+- the third argument is the number of kmeans clusters you used in analysis
+- the fourth argument is apix (which actually will be ignored, it is a dummy variable!!)
+- the final argument is the dimension of latent space
 
 Finally, you can also retrieve the star files for images in each cluster using
 
@@ -112,9 +116,9 @@ Finally, you can also retrieve the star files for images in each cluster using
 sh parse_pose.sh run_data.star 1.4 192 /work/hrd/ 12 10
 ```
 
-The first argument after parse_pose.sh is the star file of all images
-The second argument is apix value of image
-The third argument is the dimension of image
-The fourth arugment is the output directory used in training
-The fifth argument is the number of epoch you just analyzed
-The final argument is the number of kmeans clusters you used in analysis
+- The first argument after parse_pose.sh is the star file of all images
+- The second argument is apix value of image
+- The third argument is the dimension of image
+- The fourth arugment is the output directory used in training
+- The fifth argument is the number of epoch you just analyzed
+- The final argument is the number of kmeans clusters you used in analysis
