@@ -75,7 +75,7 @@ The meaning of each argument is explained as follows:
 - o, the directory name for storing results, such as model weights, latent encodings
 - r, the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask
 - downfrac, the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D*downfraco
-- lamb, the restraint strength of structural disentanglement prior proposed in DSD
+- lamb, the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields suprious result.
 - log-interval, the logging interval, the program will output some statistics after the specified steps
 
 To restart execution from a checkpoint, you can use
@@ -83,6 +83,12 @@ To restart execution from a checkpoint, you can use
 ```
 python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/output -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl
 ```
+
+- load, the weight checkpoint from the restarting epoch
+- latents, the latent encodings from the restarting epoch
+
+boths are in the output directory
+
 # analyze result
 The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz .
 clone it and change to the directory contains cryoViz
