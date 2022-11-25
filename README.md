@@ -90,6 +90,8 @@ python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-p
 
 boths are in the output directory
 
+During training, opus-DSD will output temporary volumes called ```refx*.mrc```, you can check out the intermediate result by looking at them. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. It's training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images.
+
 # analyze result
 The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz .
 clone it and change to the directory contains cryoViz
