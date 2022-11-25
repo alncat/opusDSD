@@ -4,10 +4,10 @@ Prof. Jianpeng Ma at Fudan University. The manuscript of this method is availabl
 # set up environment
 
 After cloning the repository, to run this program, you need to have an environment with pytorch and a machine with GPUs.
-You can create the conda environment using the spec-file.txt in the folder and by executing
+You can create the conda environment using the spec-file in the folder and by executing
 
 ```
-conda create --name dsd --file spec-file.txt
+conda create --name dsd --file spec-file
 ```
 
 After the environment is sucessfully created, you can then activate it and using it to execute our program.
