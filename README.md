@@ -3,8 +3,7 @@ Prof. Jianpeng Ma at Fudan University. The manuscript of this method is availabl
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/workflow.png?raw=true "Opus-DSD Workflow")
 
-Note that all input and output of this method are in real space!
-
+Note that all input and output of this method are in real space! (Fourier space is good, but how about real space!)
 The architecture of encoder is:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/encoder.png?raw=true "Opus-DSD encoder")
