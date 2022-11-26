@@ -19,7 +19,7 @@ An exmaple UMAP of latent space for 80S ribosome:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-bold.png?raw=true "80S ribosome UMAP")
 
 Another exmaple UMAP of latent space for TRPV1:
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-bold.png?raw=true "TRPV1 UMAP")
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-trpv.png?raw=true "TRPV1 UMAP")
 
 # set up environment
 
