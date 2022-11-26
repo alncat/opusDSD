@@ -1,7 +1,7 @@
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 . The workflow of this method is demonstrated as follows:
 
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/workflow.png?raw=true "Workflow")
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/workflow.png?raw=true "Opus-DSD Workflow")
 
 Note that all input and output of this method are in real space!
 
@@ -17,6 +17,9 @@ The architecture of decoder is:
 An exmaple UMAP of latent space for 80S ribosome:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-bold.png?raw=true "80S ribosome UMAP")
+
+Comparison between some states:
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborna.png?raw=true "80S ribosome rna swing")
 
 Another exmaple UMAP of latent space for TRPV1:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-trpv.png?raw=true "TRPV1 UMAP")
