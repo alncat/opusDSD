@@ -74,11 +74,12 @@ The meaning of each argument is explained as follows:
 - beta-control, the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint. You should use small beta control for low SNR dataset like cryo-EM instead of beta = 1 in beta-vae, possible ranges are [0.01-0.05]. Suitable beta-control might help disentanglement by increasing the magnitude of latent encodings, for more details, check out beta vae paper, https://openreview.net/forum?id=Sy2fzU9gl
 - beta, the schedule for restraint stengths, cos implements the cyclic annealing schedule as in https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/
 - o, the directory name for storing results, such as model weights, latent encodings
-- r, the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask
-- downfrac, the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D*downfraco
+- r, the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities.
+- downfrac, the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D*downfrac
 - lamb, the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields spurious result.
 - log-interval, the logging interval, the program will output some statistics after the specified steps
 - split, the filename for storing the train-validation split of images
+- plot, you can also specify this argument if you want to monitor how the reconstruction progress
 
 To restart execution from a checkpoint, you can use
 
