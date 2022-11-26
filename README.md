@@ -56,7 +56,7 @@ conda activate dsd
 
 # prepare data
 
-The program is implemented on the basis of great work cryoDRGN https://github.com/zhonge/cryodrgn. The data preparation process is very similar to cryoDRGN. First of all, the cryo-EM dataset should be stored as a mrcs stack file. Secondly, it requires a consensus refinement result which is stored as a relion star file. Suppose the refinement result is stored in ```run_data.star``` and the format of relion star file is not above relion3.0 .
+The program is implemented on the basis of great work cryoDRGN https://github.com/zhonge/cryodrgn. The data preparation process is very similar to cryoDRGN. First of all, the cryo-EM dataset should be stored as a mrcs stack file. Secondly, it requires a consensus refinement result which is stored as a relion star file (or any other results such as 3D classification which determine the pose parameters of images). Suppose the refinement result is stored in ```run_data.star``` and the format of relion star file is not above relion3.0 .
 
 You can then prepare the pose parameter file by executing the below command inside the opus-dsd folder:
 
