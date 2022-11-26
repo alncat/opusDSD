@@ -7,12 +7,12 @@ Note that all input and output of this method are in real space!
 
 The architecture of encoder is:
 
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/workflow.png?raw=true "Opus-DSD")
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/encoder.png?raw=true "Opus-DSD")
 
 
 The architecture of decoder is:
 
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/workflow.png?raw=true "Opus-DSD")
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/decoder.png?raw=true "Opus-DSD")
 
 
 # set up environment
