@@ -1,5 +1,14 @@
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 . The workflow of this method is demonstrated as follows:
+Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 .
+This program is built upon a set of great works:
+- cryoDRGN: https://github.com/zhonge/cryodrgn
+- Neural Volumes: https://stephenlombardi.github.io/projects/neuralvolumes/
+- UMAP: https://umap-learn.readthedocs.io/en/latest/
+- Healpy: https://healpy.readthedocs.io/en/latest/
+
+It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions!
+
+The workflow of this method is demonstrated as follows:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/workflow.png?raw=true "Opus-DSD Workflow")
 
