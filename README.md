@@ -5,6 +5,16 @@ Prof. Jianpeng Ma at Fudan University. The manuscript of this method is availabl
 
 Note that all input and output of this method are in real space!
 
+The architecture of encoder is:
+
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/workflow.png?raw=true "Opus-DSD")
+
+
+The architecture of decoder is:
+
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/workflow.png?raw=true "Opus-DSD")
+
+
 # set up environment
 
 After cloning the repository, to run this program, you need to have an environment with pytorch and a machine with GPUs.
