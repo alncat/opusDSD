@@ -6,7 +6,7 @@ This program is built upon a set of great works:
 - UMAP: https://umap-learn.readthedocs.io/en/latest/
 - Healpy: https://healpy.readthedocs.io/en/latest/
 
-It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions!
+It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions! Such an informative latent space should make data anlysis much easier!
 
 The workflow of this method is demonstrated as follows:
 
