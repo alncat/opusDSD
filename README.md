@@ -37,7 +37,7 @@ Note that UMAP1 actually correlates with this movement!
 Another exmaple UMAP of latent space for TRPV1:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-trpv.png?raw=true "TRPV1 UMAP")
 
-The final note is that, deep learning is great, but always be critical when applying it to highly noisy dataset such as cryo-EM images!
+The final note is that, deep learning is great, but always be critical when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
 
 # set up environment
 
