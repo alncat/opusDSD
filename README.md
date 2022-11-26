@@ -1,6 +1,6 @@
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 . The workflow of this method is visualized as
-![Alt text](./img.jpg?raw=true "Opus-DSD")
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/workflow.png?raw=true "Opus-DSD")
 
 # set up environment
 
