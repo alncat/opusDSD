@@ -37,6 +37,8 @@ Note that UMAP1 actually correlates with this movement!
 Another exmaple UMAP of latent space for TRPV1:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-trpv.png?raw=true "TRPV1 UMAP")
 
+The final note is that, deep learning is great, but always be critical when applying it to highly noisy dataset such as cryo-EM images!
+
 # set up environment
 
 After cloning the repository, to run this program, you need to have an environment with pytorch and a machine with GPUs. The recommended configuration is a machine with 4 V100 GPUs.
