@@ -51,6 +51,7 @@ suppose the run_data.star is located at ```/work/``` directory, where
 - D is the dimension of your dataset,
 - Apix is the angstrom per pixel of you dataset,
 - o is followed by the filename of pose parameter used by our program.
+- relion31 add this argument if you are using star file from relion with version higher than 3.0
 
 Next, you can prepare the ctf parameter file by executing:
 
@@ -59,6 +60,8 @@ python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.4
 ```
 - o-g is used to specify the filename of ctf groups of your dataset.
 - ps is used to specify the amount of phaseshift in the dataset.
+
+Checkout ```prepare.sh``` which combine both commands to save your typing.
 
 Thirdly, you should put the path of image stack in a txt file, e.g.,
 
