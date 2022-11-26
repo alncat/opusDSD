@@ -29,6 +29,11 @@ An exmaple UMAP of latent space for 80S ribosome:
 Comparison between some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborna.png?raw=true "80S ribosome rna swing")
 
+
+40S subunit rotation
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborotation.png?raw=true "80S ribosome rotation")
+Note that UMAP1 actually correlates with this movement!
+
 Another exmaple UMAP of latent space for TRPV1:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-trpv.png?raw=true "TRPV1 UMAP")
 
