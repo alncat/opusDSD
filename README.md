@@ -120,7 +120,7 @@ The meaning of each argument is explained as follows:
 - lamb, the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields spurious result.
 - log-interval, the logging interval, the program will output some statistics after the specified steps
 - split, the filename for storing the train-validation split of images
-- bfactor, will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, increase it may lead to sharper reconstruction
+- bfactor, will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it may lead to sharper reconstruction
 - plot, you can also specify this argument if you want to monitor how the reconstruction progress
 
 Happy Training!
