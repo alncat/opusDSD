@@ -914,6 +914,7 @@ def main(args):
     val_data_generator = DataLoader(data, batch_sampler=val_sampler)
 
     log(f'image will be downsampled to {args.downfrac} of original size {D-1}')
+    log(f'reconstruction will be blurred by bfactor {args.bfactor}')
 
     # learning rate scheduler
     # training loop
