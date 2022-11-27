@@ -34,7 +34,7 @@ Comparison between some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborotation.png?raw=true "80S ribosome rotation")
 Note that UMAP1 actually correlates with this movement!
 
-A more colorful one,
+A more colorful one
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
 Another exmaple UMAP of latent space for TRPV1:
