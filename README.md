@@ -18,7 +18,7 @@ The architecture of encoder is (Encoder class in cryodrgn/models.py):
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/encoder.png?raw=true "Opus-DSD encoder")
 
 
-The architecture of decoder is (ConvTemplate class in cryodrgn/models.py):
+The architecture of decoder is (ConvTemplate class in cryodrgn/models.py, in this version, the output volume is of size 192^3, I downsampled the intermediate activations to save some memories for architecture, you can adjust it as you wish, happy hacking!):
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
@@ -121,6 +121,8 @@ The meaning of each argument is explained as follows:
 - log-interval, the logging interval, the program will output some statistics after the specified steps
 - split, the filename for storing the train-validation split of images
 - plot, you can also specify this argument if you want to monitor how the reconstruction progress
+
+Happy Training!
 
 To restart execution from a checkpoint, you can use
 
