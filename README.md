@@ -18,7 +18,7 @@ The architecture of encoder is (Encoder class in cryodrgn/models.py):
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/encoder.png?raw=true "Opus-DSD encoder")
 
 
-The architecture of decoder is (ConvTemplate class in cryodrgn/models.py, in this version, the output volume is of size 192^3, I downsampled the intermediate activations to save some memories for architecture, you can adjust it as you wish, happy hacking!):
+The architecture of decoder is (ConvTemplate class in cryodrgn/models.py, in this version, the output volume is of size 192^3, I downsampled the intermediate activations to save some memories for this architecture, you can adjust it as you wish, happy hacking!):
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
