@@ -6,19 +6,19 @@ This program is built upon a set of great works:
 - UMAP: https://umap-learn.readthedocs.io/en/latest/
 - Healpy: https://healpy.readthedocs.io/en/latest/
 
-It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions! Such an informative latent space should make data anlysis much easier!
+It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions! Such an informative latent space should make data analysis much easier!
 
 The workflow of this method is demonstrated as follows:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/workflow.png?raw=true "Opus-DSD Workflow")
 
 Note that all input and output of this method are in real space! (Fourier space is good, but how about real space!)
-The architecture of encoder is:
+The architecture of encoder is (Encoder class in cryodrgn/models.py):
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/encoder.png?raw=true "Opus-DSD encoder")
 
 
-The architecture of decoder is:
+The architecture of decoder is (ConvTemplate class in cryodrgn/models.py):
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
