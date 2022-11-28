@@ -44,7 +44,7 @@ Another exmaple UMAP of latent space for Hrd1/Hrd3 complex:
 Tile of some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrd.png?raw=true "hrd 15")
 
-We should note regard all missing densities at a certain contour level as compositional difference in those states unless the occupancy difference is of large scale or consistent across different contour levels, like state 4 can be safely regarded as a different class since the whole left upper corner is gone! If you believe your dataset is very homogenous, then you should focus on verifying whether the learning result reflects certain consistent dynamics. The final note is that, deep learning is great, but always be critical about its result when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
+We should not regard all missing densities at a certain contour level as compositional difference in those states unless the occupancy difference is of large scale or consistent across different contour levels, like state 4 can be safely regarded as a different class since the whole left upper corner is gone! The weak densities might also cause by poor pose alignments due to the high flexibility in that region. Hence, those regions can only resolve to poor resolutions even using our disentanglement program. If you believe your dataset is very homogenous, then you should focus on verifying whether the learning result reflects certain consistent dynamics. The final note is that, deep learning is great, but always be critical about its result when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
 
 
 The corresponding UMAP shows the locations of states:
@@ -71,7 +71,7 @@ conda activate dsd
 
 # prepare data
 
-The program is implemented on the basis of great work cryoDRGN https://github.com/zhonge/cryodrgn. The data preparation process is very similar to cryoDRGN. First of all, the cryo-EM dataset should be stored as a mrcs stack file. Secondly, it requires a consensus refinement result without applying any symmetry which is stored as a relion star file (or any other results such as 3D classification which determine the pose parameters of images). Suppose the refinement result is stored in ```run_data.star``` and the format of relion star file is not above relion3.0 .
+The program is implemented on the basis of cryoDRGN. The data preparation process is very similar to it. First of all, the cryo-EM dataset should be stored as a mrcs stack file. Secondly, it requires a consensus refinement result without applying any symmetry which is stored as a relion star file (or any other results such as 3D classification which determine the pose parameters of images). Suppose the refinement result is stored in ```run_data.star``` and the format of relion star file is not above relion3.0 .
 
 You can then prepare the pose parameter file by executing the below command inside the opus-dsd folder:
 
