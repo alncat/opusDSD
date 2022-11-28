@@ -41,6 +41,17 @@ A more colorful one, the particles are colored according to their projection cla
 Another exmaple UMAP of latent space for Hrd3/Hrd1 complex:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapht.png?raw=true "Hrd1/Hrd3 UMAP")
 
+Tile of some states:
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrd.png?raw=true "hrd 15")
+
+The corresponding UMAP shows the locations of states:
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umaph15.png?raw=true "hrd umap 15")
+
+Superposition of states:
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrds.png?raw=true "hrd 15 superposition")
+
+
+
 The final note is that, deep learning is great, but always be critical when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
 
 # set up environment
