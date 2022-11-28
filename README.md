@@ -44,7 +44,7 @@ Another exmaple UMAP of latent space for Hrd1/Hrd3 complex:
 Tile of some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrd.png?raw=true "hrd 15")
 
-We should not regard all missing densities at a certain contour level as compositional difference in those states unless the occupancy difference is of large scale or consistent across different contour levels, like state 4 can be safely regarded as a different class since the whole left upper corner is gone! The weak densities might also cause by poor pose alignments due to the high flexibility in that region. Hence, those regions can only resolve to poor resolutions even using our disentanglement program. If you believe your dataset is very homogenous, then you should focus on verifying whether the learning result reflects certain consistent dynamics. The final note is that, deep learning is great, but always be critical about its result when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
+We should not regard all missing densities at a certain contour level as compositional difference in those states unless the occupancy difference is of large scale or consistent across different contour levels, like state 4 can be safely regarded as a different class since the whole left upper corner is gone! The weak densities might also be caused by poor pose alignments due to the high flexibility in that region. Hence, those regions can only resolve to poor resolutions even using our disentanglement program. If you believe your dataset is very homogenous, then you should focus on verifying whether the learning result reflects certain consistent dynamics. The final note is that, deep learning is great, but always be critical about its result when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
 
 
 The corresponding UMAP shows the locations of states:
@@ -53,6 +53,7 @@ The corresponding UMAP shows the locations of states:
 Superposition of states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrds.png?raw=true "hrd 15 superposition")
 
+The superposition clearly demonstrated the wiggling of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolutions like 4.7 angstrom (consensus model) and the upper middle part shows blurred densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
 
 # set up environment
 
