@@ -34,7 +34,7 @@ Comparison between some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborotation.png?raw=true "80S ribosome rotation")
 Note that UMAP1 actually correlates with this movement!
 
-A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variation in images by distorting their pose paramter!
+A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variation in images by distorting their pose paramters!
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
@@ -102,7 +102,7 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --split hrd-split.pkl --bfactor 3.
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --split hrd-split.pkl --bfactor 4.
 ```
 
 The meaning of each argument is explained as follows:
@@ -124,7 +124,7 @@ The meaning of each argument is explained as follows:
 - lamb, the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields spurious result.
 - log-interval, the logging interval, the program will output some statistics after the specified steps
 - split, the filename for storing the train-validation split of images
-- bfactor, will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it may lead to sharper reconstruction,
+- bfactor, will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate
 - plot, you can also specify this argument if you want to monitor how the reconstruction progress
 
 Happy Training!
