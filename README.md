@@ -38,7 +38,7 @@ A more colorful one, the particles are colored according to their projection cla
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
-Another exmaple UMAP of latent space for Hrd3/Hrd1 complex:
+Another exmaple UMAP of latent space for Hrd1/Hrd3 complex:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapht.png?raw=true "Hrd1/Hrd3 UMAP")
 
 Tile of some states:
