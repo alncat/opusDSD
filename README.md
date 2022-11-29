@@ -1,3 +1,7 @@
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
+UMAP of 80 ribosome (EMPIAR-10002 https://www.ebi.ac.uk/empiar/EMPIAR-10002/), the particles are colored according to their pose parameters. The uneven distribution of pose parameters reflects the pose assignment errors caused by performing consensus refinement on dynamical cryo-EM dataset.
+
+# Opus-DSD
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 .
 This program is built upon a set of great works:
