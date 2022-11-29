@@ -10,7 +10,7 @@ This program is built upon a set of great works:
 - UMAP: https://umap-learn.readthedocs.io/en/latest/
 - Healpy: https://healpy.readthedocs.io/en/latest/
 
-It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions! Such an informative latent space should make data analysis much easier!
+It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions! Such an informative latent space should make data analysis much easier! Our method actually works by exploiting the unavoidable pose assignment errors brought by consensus refinement while reducing the impact of pose assignment errors on the quality of 3D reconstructions! (sounds contradictary but it works!)
 
 The workflow of this method is demonstrated as follows:
 
