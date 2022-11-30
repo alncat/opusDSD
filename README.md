@@ -95,7 +95,7 @@ The program is implemented on the basis of cryoDRGN. The data preparation proces
 You can then prepare the pose parameter file by executing the below command inside the opus-dsd folder:
 
 ```
-python -m cryodrgn.commands.parse_pose_star /work/run_data.star -D 192 --Apix 1.4 -o hrd-pose-euler.pkl
+python -m cryodrgn.commands.parse_pose_star /work/run_data.star -D 192 --Apix 1.35 -o hrd-pose-euler.pkl
 ```
 suppose the run_data.star is located at ```/work/``` directory, where
 | argument | explanation|
@@ -108,7 +108,7 @@ suppose the run_data.star is located at ```/work/``` directory, where
 Next, you can prepare the ctf parameter file by executing:
 
 ```
-python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.4 -o hrd-ctf.pkl -o-g mtr-grp.pkl --ps 0
+python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.35 -o hrd-ctf.pkl -o-g mtr-grp.pkl --ps 0
 ```
 | argument | explanation|
 | --- | --- |
@@ -210,7 +210,7 @@ correspondings to the cluster centroids.
 Finally, you can also retrieve the star files for images in each cluster using
 
 ```
-sh parse_pose.sh run_data.star 1.4 192 /work/hrd/ 12 10
+sh parse_pose.sh run_data.star 1.35 192 /work/hrd/ 12 10
 ```
 
 - The first argument after parse_pose.sh is the star file of all images
