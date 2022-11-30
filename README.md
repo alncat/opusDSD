@@ -153,7 +153,7 @@ The meaning of each argument is explained as follows:
 | log-interval | the logging interval, the program will output some statistics after the specified steps |
 | split | the filename for storing the train-validation split of images |
 | bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate |
-| plot | you can also specify this argument if you want to monitor how the reconstruction progress |
+| plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will output the 2D reconstructions after several log-intervals |
 
 Happy Training!
 
