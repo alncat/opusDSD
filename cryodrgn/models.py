@@ -441,8 +441,7 @@ class ConvTemplate(nn.Module):
         utils.initmod(self.conv_out, gain=1./np.sqrt(self.templateres))
 
         self.intermediate_size = int(32*self.templateres/256)
-        log('convtemplate: the output volume is of size {}, intermediate activations \
-            will be resampled from 32 to {}'.format(self.templateres, self.intermediate_size))
+        log('convtemplate: the output volume is of size {}, intermediate activations will be resampled from 32 to {}'.format(self.templateres, self.intermediate_size))
 
         # output rigid grid transformations
 
