@@ -133,27 +133,27 @@ python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-p
 ```
 
 The meaning of each argument is explained as follows:
-| | |
+| argument |  explanation |
 | --- | --- |
-| ctf,   | ctf parameters of the image stack |
-| poses, | pose parameters of the image stack |
-| n,     | the number of training epoches, each training epoch uses the whole image stack |
-| group, | ctf groups of the image stack |
-| b,     | the number of images for each batch on each gpu |
-| zdim,  | the dimension of latent encodings, increase the zdim will improve the fitting capacity of neural network, but may risk of overfitting |
-| lr,    | the initial learning rate for adam optimizer, 1.e-4 should work, but you may use larger lr for dataset with higher SNR |
-| num-gpus, | the number of gpus used for training, note that the total number of images in the total batch will be n*num-gpus |
-| multigpu, |toggle on the data parallel version |
-| beta-control, |the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint. You should use small beta control for low SNR dataset like cryo-EM instead of beta = 1 in original beta-vae, possible ranges are [0.01-0.1]. You are safe to use larger beta-control for dataset with higher SNR. Suitable beta-control might help disentanglement by increasing the magnitude of latent encodings, for more details, check out [beta vae paper](https://openreview.net/forum?id=Sy2fzU9gl) |
-| beta, |the schedule for restraint stengths, cos implements the [cyclic annealing schedule](https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/) |
-| o, | the directory name for storing results, such as model weights, latent encodings |
-| r, | the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
-| downfrac, | the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D\*downfrac. You can set it according to resolution of consensus model. We only support D\*downfrac >= 128 so far (I may fix this behavior later) |
-| lamb, | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields spurious result. |
-| log-interval, | the logging interval, the program will output some statistics after the specified steps |
-| split, | the filename for storing the train-validation split of images |
-| bfactor, | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate |
-| plot, | you can also specify this argument if you want to monitor how the reconstruction progress |
+| ctf   | ctf parameters of the image stack |
+| poses | pose parameters of the image stack |
+| n     | the number of training epoches, each training epoch uses the whole image stack |
+| group | ctf groups of the image stack |
+| b     | the number of images for each batch on each gpu |
+| zdim  | the dimension of latent encodings, increase the zdim will improve the fitting capacity of neural network, but may risk of overfitting |
+| lr    | the initial learning rate for adam optimizer, 1.e-4 should work, but you may use larger lr for dataset with higher SNR |
+| num-gpus | the number of gpus used for training, note that the total number of images in the total batch will be n*num-gpus |
+| multigpu |toggle on the data parallel version |
+| beta-control |the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint. You should use small beta control for low SNR dataset like cryo-EM instead of beta = 1 in original beta-vae, possible ranges are [0.01-0.1]. You are safe to use larger beta-control for dataset with higher SNR. Suitable beta-control might help disentanglement by increasing the magnitude of latent encodings, for more details, check out [beta vae paper](https://openreview.net/forum?id=Sy2fzU9gl) |
+| beta |the schedule for restraint stengths, cos implements the [cyclic annealing schedule](https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/) |
+| o | the directory name for storing results, such as model weights, latent encodings |
+| r | the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
+| downfrac | the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D\*downfrac. You can set it according to resolution of consensus model. We only support D\*downfrac >= 128 so far (I may fix this behavior later) |
+| lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields spurious result. |
+| log-interval | the logging interval, the program will output some statistics after the specified steps |
+| split | the filename for storing the train-validation split of images |
+| bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate |
+| plot | you can also specify this argument if you want to monitor how the reconstruction progress |
 
 Happy Training!
 
