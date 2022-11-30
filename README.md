@@ -1,14 +1,16 @@
-## UMAP of the latent space of 80 ribosome learned by opus-DSD
+# Table of contents
+1. [example UMAP](#umap)
+2. [Opus-DSD](#opusdsd)
+3. [setup environment](#setup)
+4. [prepare data](#preparation)
+5. [training](#training)
+6. [analyze result](#analysis)
+
+
+## UMAP of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
 (EMPIAR-10002 https://www.ebi.ac.uk/empiar/EMPIAR-10002/), the particles are colored according to their pose parameters. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset.
-
-# Table of contents
-1. [Opus-DSD](#opusdsd)
-2. [setup environment](#setup)
-3. [prepare data](#preparation)
-4. [training](#training)
-5. [analyze result](#analysis)
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
