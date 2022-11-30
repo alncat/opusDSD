@@ -161,6 +161,7 @@ The meaning of each argument is explained as follows:
 | --split | the filename for storing the train-validation split of images |
 | --bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate |
 | --plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will output the 2D reconstructions after several log-intervals |
+| --templateres | the size of output volume of our convolutional network, it will be further resampled by spatial transformer before projecting to 2D images. The default value is 192. You can tweak it to other resolutions, larger resolutions can generate smoother density maps when downsampled from the output volume |
 
 Happy Training! Contact us if you run into any troubles, since we may miss certain points when writing this tutorial.
 

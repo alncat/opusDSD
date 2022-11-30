@@ -75,7 +75,8 @@ def add_args(parser):
     group.add_argument('--lr', type=float, default=1e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
     group.add_argument('--lamb', type=float, default=1, help='penalty for umap prior (default: %(default)s)')
     group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
-    group.add_argument('--bfactor', type=float, default=1.5, help='apply bfactor (default: %(default)s) to reconstruction')
+    group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
+    group.add_argument('--bfactor', type=float, default=3., help='apply bfactor (default: %(default)s) to reconstruction')
     group.add_argument('--beta', default=None, help='Choice of beta schedule or a constant for KLD weight (default: 1/zdim)')
     group.add_argument('--beta-control', type=float, help='KL-Controlled VAE gamma. Beta is KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
@@ -603,7 +604,8 @@ def save_config(args, dataset, lattice, model, out_config):
                       activation=args.activation,
                       template_type=args.template_type,
                       down_vol_size=model.down_vol_size,
-                      Apix=model.decoder.Apix)
+                      Apix=model.decoder.Apix,
+                      templateres=model.templateres)
     config = dict(dataset_args=dataset_args,
                   lattice_args=lattice_args,
                   model_args=model_args)
@@ -787,7 +789,8 @@ def main(args):
                 num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=ctf_grid,
                 deform_emb_size=args.deform_size,
-                downfrac=args.downfrac)
+                downfrac=args.downfrac,
+                templateres=args.templateres)
 
 
     flog(model)
@@ -913,8 +916,8 @@ def main(args):
     data_generator = DataLoader(data, batch_sampler=train_sampler)
     val_data_generator = DataLoader(data, batch_sampler=val_sampler)
 
-    log(f'image will be downsampled to {args.downfrac} of original size {D-1}, which should be at least 128')
     assert args.downfrac*(D-1) >= 128
+    log(f'image will be downsampled to {args.downfrac} of original size {D-1}')
     log(f'reconstruction will be blurred by bfactor {args.bfactor}')
 
     # learning rate scheduler
