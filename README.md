@@ -10,7 +10,7 @@
 # UMAP of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
-(EMPIAR-10002 https://www.ebi.ac.uk/empiar/EMPIAR-10002/), the particles are colored according to their pose parameters. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset.
+[EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/), the particles are colored according to their pose parameters. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset.
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
@@ -37,6 +37,7 @@ The architecture of decoder is (ConvTemplate class in cryodrgn/models.py, in thi
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
+## 80S ribosome
 An exmaple UMAP of latent space for 80S ribosome:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-bold.png?raw=true "80S ribosome UMAP")
@@ -52,6 +53,8 @@ Note that UMAP1 actually correlates with this movement!
 A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
+
+## Hrd1/Hrd3 complex
 
 Another exmaple UMAP of latent space for Hrd1/Hrd3 complex:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapht.png?raw=true "Hrd1/Hrd3 UMAP")
@@ -159,7 +162,7 @@ The meaning of each argument is explained as follows:
 | bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate |
 | plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will output the 2D reconstructions after several log-intervals |
 
-Happy Training!
+Happy Training! Contact us if you run into any troubles, since we may miss certain points when writing this tutorial.
 
 To restart execution from a checkpoint, you can use
 
