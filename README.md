@@ -133,7 +133,8 @@ python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-p
 ```
 
 The meaning of each argument is explained as follows:
-
+| | |
+| --- | --- |
 | ctf,   | ctf parameters of the image stack |
 | poses, | pose parameters of the image stack |
 | n,     | the number of training epoches, each training epoch uses the whole image stack |
