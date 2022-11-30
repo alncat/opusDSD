@@ -3,9 +3,14 @@
 
 (EMPIAR-10002 https://www.ebi.ac.uk/empiar/EMPIAR-10002/), the particles are colored according to their pose parameters. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset.
 
-{:toc}
+# Table of contents
+1. [Opus-DSD] (#opusdsd)
+2. [setup environment] (#setup)
+3. [prepare data] (#preparation)
+4. [training] (#training)
+5. [analyze result] (#analysis)
 
-# Opus-DSD
+# Opus-DSD <a name="opusdsd"></a>
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 .
 This program is built upon a set of great works:
@@ -63,7 +68,7 @@ Superposition of state 8 with state 3:
 
 The superposition clearly demonstrated the relative displacements of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolution like 4.7 angstrom (consensus model) and the upper middle part shows blurred weak densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
 
-# set up environment
+# set up environment <a name="setup"></a>
 
 After cloning the repository, to run this program, you need to have an environment with pytorch and a machine with GPUs. The recommended configuration is a machine with 4 V100 GPUs.
 You can create the conda environment for DSD using the spec-file in the folder and by executing
@@ -78,7 +83,7 @@ After the environment is sucessfully created, you can then activate it and using
 conda activate dsd
 ```
 
-# prepare data
+# prepare data <a name="preparation"></a>
 
 The program is implemented on the basis of cryoDRGN. The data preparation process is very similar to it. First of all, the cryo-EM dataset should be stored as a mrcs stack file. Secondly, it requires a consensus refinement result without applying any symmetry which is stored as a relion star file (or any other results such as 3D classification which determine the pose parameters of images). Suppose the refinement result is stored in ```run_data.star``` and the format of relion star file is not above relion3.0 .
 
@@ -117,7 +122,7 @@ Finally, you should create a mask using the consensus model and RELION as in the
 After executing all these steps, you have three pkls for running opus-DSD in the program directory ( You can specify other directories in the command arguments ).
 
 
-# training
+# training <a name="training"></a>
 
 With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
 
@@ -162,7 +167,7 @@ boths are in the output directory
 
 During training, opus-DSD will output temporary volumes called ```refx*.mrc```, you can check out the intermediate result by looking at them. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
 
-# analyze result
+# analyze result <a name="analysis"></a>
 The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz .
 clone it and change to the directory contains cryoViz
 
