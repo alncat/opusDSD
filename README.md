@@ -3,6 +3,8 @@
 
 (EMPIAR-10002 https://www.ebi.ac.uk/empiar/EMPIAR-10002/), the particles are colored according to their pose parameters. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset.
 
+{:toc}
+
 # Opus-DSD
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 .
@@ -59,7 +61,7 @@ The corresponding UMAP shows the locations of states:
 Superposition of state 8 with state 3:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrds.png?raw=true "hrd 15 superposition")
 
-The superposition clearly demonstrated the relative displacements of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolutions like 4.7 angstrom (consensus model) and the upper middle part shows blurred weak densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
+The superposition clearly demonstrated the relative displacements of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolution like 4.7 angstrom (consensus model) and the upper middle part shows blurred weak densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
 
 # set up environment
 
