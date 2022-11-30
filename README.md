@@ -1,5 +1,5 @@
 # Table of contents
-1. [example UMAP](#umap)
+1. [UMAP example](#umap)
 2. [Opus-DSD](#opusdsd)
 3. [setup environment](#setup)
 4. [prepare data](#preparation)
