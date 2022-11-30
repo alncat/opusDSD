@@ -16,10 +16,10 @@
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1 .
 This program is built upon a set of great works:
-- cryoDRGN: https://github.com/zhonge/cryodrgn
-- Neural Volumes: https://stephenlombardi.github.io/projects/neuralvolumes/
-- UMAP: https://umap-learn.readthedocs.io/en/latest/
-- Healpy: https://healpy.readthedocs.io/en/latest/
+- [cryoDRGN](https://github.com/zhonge/cryodrgn)
+- [Neural Volumes](https://stephenlombardi.github.io/projects/neuralvolumes/)
+- [UMAP](https://umap-learn.readthedocs.io/en/latest/)
+- [Healpy](https://healpy.readthedocs.io/en/latest/)
 
 It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions! Such an informative latent space should make data analysis much easier! **Our method actually works by exploiting the unavoidable pose assignment errors brought by consensus refinement while reducing the impact of pose assignment errors on the quality of 3D reconstructions! (sounds contradictary but it works!)**
 
