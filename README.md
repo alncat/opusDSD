@@ -56,10 +56,10 @@ We should not regard all missing densities at a certain contour level as composi
 The corresponding UMAP shows the locations of states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umaph15.png?raw=true "hrd umap 15")
 
-Superposition of states:
+Superposition of state 8 with state 3:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrds.png?raw=true "hrd 15 superposition")
 
-The superposition clearly demonstrated the wiggling of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolutions like 4.7 angstrom (consensus model) and the upper middle part shows blurred densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
+The superposition clearly demonstrated the relative displacements of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolutions like 4.7 angstrom (consensus model) and the upper middle part shows blurred weak densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
 
 # set up environment
 
