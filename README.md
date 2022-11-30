@@ -50,7 +50,7 @@ Comparison between some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborotation.png?raw=true "80S ribosome rotation")
 Note that UMAP1 actually correlates with this movement!
 
-A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)
+A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like *fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)*
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
