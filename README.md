@@ -56,7 +56,7 @@ A more colorful one, the particles are colored according to their projection cla
 
 ## Hrd1/Hrd3 complex
 
-Another exmaple UMAP of latent space for Hrd1/Hrd3 complex:
+Another exmaple UMAP of latent space for Hrd1/Hrd3 complex [EMPIAR-10099](https://www.ebi.ac.uk/empiar/EMPIAR-10099/):
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapht.png?raw=true "Hrd1/Hrd3 UMAP")
 
 Tile of some states:
