@@ -200,6 +200,8 @@ During training, opus-DSD will output temporary volumes called ```refx*.mrc```, 
 The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz . Sorry guys, i keep this in a sperate repo since these two programs are updated at different paces.
 Clone it and change to the directory contains cryoViz.
 
+The first step is to sample the latent space using kmeans algorithm.
+
 ```
 sh analyze.sh /work/hrd 15 /work/hrd/hrd_pose_euler.pkl 20
 ```
@@ -210,6 +212,8 @@ sh analyze.sh /work/hrd 15 /work/hrd/hrd_pose_euler.pkl 20
 - the final argument is the number of clusters for kmeans clustering.
 
 The analysis result will be stored in /work/hrd/analyze.15, i.e., the output directory plus the epoch number you analyzed, using the above command.
+
+After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap directly.
 
 You can generate the volume corresponds to each cluster centroid using
 
