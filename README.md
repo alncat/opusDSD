@@ -198,8 +198,6 @@ During training, opus-DSD will output temporary volumes called ```refx*.mrc```, 
 
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following.
-(Deprecated! The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz . Sorry guys, i keep this in a sperate repo since these two programs are updated at different paces.
-Clone it and change to the directory contains cryoViz.)
 
 The first step is to sample the latent space using kmeans algorithm.
 
