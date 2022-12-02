@@ -67,7 +67,7 @@ class HetOnlyVAE(nn.Module):
             log("model: masking volume using fraction: {}".format(mask_frac))
             self.window_r = min(mask_frac, 0.95)
         else:
-            self.window_r = 0.85
+            self.window_r = downfrac
         self.down_vol_size = int(self.render_size*self.window_r)//2*2
         self.ref_vol = ref_vol
 
@@ -321,10 +321,10 @@ class HetOnlyVAE(nn.Module):
         else:
             return self.decode(*args, **kwargs)
 
-    def save_mrc(self, filename, enc=None):
+    def save_mrc(self, filename, enc=None, Apix=1.):
         if self.vanilla_dec:
             if enc is not None:
-                self.decoder.save(filename, z=enc)
+                self.decoder.save(filename, z=enc, Apix=Apix)
 
     def get_images(self, rots, trans):
         assert self.vanilla_dec
@@ -438,7 +438,7 @@ class ConvTemplate(nn.Module):
         #self.conv_out = nn.Conv3d(inchannels, 1, 3, 1, 1)
         for m in [self.template1, self.template2, self.template3, self.template4]:
             utils.initseq(m)
-        utils.initmod(self.conv_out, gain=1./np.sqrt(self.templateres))
+        utils.initmod(self.conv_out, gain=1./np.sqrt(templateres//2))
 
         self.intermediate_size = int(32*self.templateres/256)
         log('convtemplate: the output volume is of size {}, intermediate activations will be resampled from 32 to {}'.format(self.templateres, self.intermediate_size))
@@ -1442,10 +1442,10 @@ class VanillaDecoder(nn.Module):
             mrc.write(filename + str(dev_id) + ".mrc", template.detach().cpu().numpy(), Apix=self.Apix, is_vol=True)
 
     @torch.no_grad()
-    def save(self, filename, z=None, encoding=None, flip=False):
+    def save(self, filename, z=None, encoding=None, flip=False, Apix=1.):
         if self.template_type == "conv":
             template, _ = self.template(z)
-            if self.transformer.templateres != self.vol_size:
+            if self.transformer.templateres != self.templateres:
                 #resample
                 #template = F.grid_sample(template, self.grid, align_corners=True)
                 template = self.transformer.sample(template)
@@ -1454,7 +1454,7 @@ class VanillaDecoder(nn.Module):
             template = self.template
         if flip:
             template = template.flip(0)
-        mrc.write(filename + ".mrc", template.detach().cpu().numpy(), Apix=self.Apix, is_vol=True)
+        mrc.write(filename + ".mrc", template.detach().cpu().numpy(), Apix=Apix, is_vol=True)
 
     def get_vol(self, z=None):
         if self.template_type == "conv":

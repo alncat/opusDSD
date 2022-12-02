@@ -14,12 +14,14 @@ def add_args(parser):
     parser.add_argument('-D', type=int, required=True, help='Box size of reconstruction (pixels)')
     parser.add_argument('--relion31', action='store_true', help='Flag for relion3.1 star format')
     parser.add_argument('--Apix', type=float, help='Pixel size (A); Required if translations are specified in Angstroms')
-    parser.add_argument('-o', metavar='PKL', type=os.path.abspath, required=True, help='Output pose.pkl')
+    parser.add_argument('-o', metavar='PKL', type=os.path.abspath, required=False, help='Output pose.pkl')
+    parser.add_argument('--labels', metavar='PKL', type=os.path.abspath, required=False, help='Output label.pkl')
+    parser.add_argument('--outdir', type=os.path.abspath)
     return parser
 
 def main(args):
     assert args.input.endswith('.star'), "Input file must be .star file"
-    assert args.o.endswith('.pkl'), "Output format must be .pkl"
+    #assert args.o.endswith('.pkl'), "Output format must be .pkl"
 
     s = starfile.Starfile.load(args.input, relion31=args.relion31)
     N = len(s.df)
@@ -36,6 +38,13 @@ def main(args):
     log('Converting to rotation matrix:')
     rot = np.asarray([utils.R_from_relion(*x) for x in euler])
     log(rot[0])
+    if args.labels is not None:
+        labels = utils.load_pkl(args.labels)
+        log(f'Read labels from {args.labels}')
+        for i in range(labels.min(), labels.max()):
+            out_file = args.outdir + "/pre" + str(i) + ".star"
+            log(f'Writing particles in cluster {i} to {out_file}')
+            s.write_subset(out_file, labels==i)
 
     # parse translations
     trans = np.empty((N,2))
@@ -55,9 +64,10 @@ def main(args):
     trans /= args.D
 
     # write output
-    log(f'Writing {args.o}')
-    with open(args.o,'wb') as f:
-        pickle.dump((rot,trans,euler),f)
+    if args.o is not None:
+        log(f'Writing {args.o}')
+        with open(args.o,'wb') as f:
+            pickle.dump((rot,trans,euler),f)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)

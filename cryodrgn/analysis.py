@@ -40,7 +40,7 @@ def run_pca(z):
 def get_pc_traj(pca, zdim, numpoints, dim, start, end, percentiles=None):
     '''
     Create trajectory along specified principle component
-    
+
     Inputs:
         pca: sklearn PCA object from run_pca
         zdim (int)
@@ -49,7 +49,7 @@ def get_pc_traj(pca, zdim, numpoints, dim, start, end, percentiles=None):
         start (float): Value of PC{dim} to start trajectory
         end (float): Value of PC{dim} to stop trajectory
         percentiles (np.array or None): Define percentile array instead of np.linspace(start,stop,numpoints)
-    
+
     Returns:
         np.array (numpoints x zdim) of z values along PC
     '''
@@ -82,6 +82,30 @@ def cluster_kmeans(z, K, on_data=True, reorder=True):
     '''
     kmeans = KMeans(n_clusters=K,
                     random_state=0,
+                    max_iter=100)
+    labels = kmeans.fit_predict(z)
+    centers = kmeans.cluster_centers_
+
+    if on_data:
+        centers, centers_ind = get_nearest_point(z, centers)
+
+    if reorder:
+        g = sns.clustermap(centers)
+        reordered = g.dendrogram_row.reordered_ind
+        centers = centers[reordered]
+        if on_data: centers_ind = centers_ind[reordered]
+        tmp = {k:i for i,k in enumerate(reordered)}
+        labels = np.array([tmp[k] for k in labels])
+    return labels, centers
+
+def cluster_sphere_kmeans(z, K, on_data=True, reorder=True):
+    '''
+    Cluster z by K means clustering
+    Returns cluster labels, cluster centers
+    If reorder=True, reorders clusters according to agglomerative clustering of cluster centers
+    '''
+    kmeans = KMeans(n_clusters=K,
+                    random_state=0,
                     max_iter=10)
     labels = kmeans.fit_predict(z)
     centers = kmeans.cluster_centers_
@@ -101,7 +125,7 @@ def cluster_kmeans(z, K, on_data=True, reorder=True):
 def cluster_gmm(z, K, on_data=True, random_state=None, **kwargs):
     '''
     Cluster z by a K-component full covariance Gaussian mixture model
-    
+
     Inputs:
         z (Ndata x zdim np.array): Latent encodings
         K (int): Number of clusters
@@ -109,7 +133,7 @@ def cluster_gmm(z, K, on_data=True, random_state=None, **kwargs):
         random_state (int or None): Random seed used for GMM clustering
         **kwargs: Additional keyword arguments passed to sklearn.mixture.GaussianMixture
 
-    Returns: 
+    Returns:
         np.array (Ndata,) of cluster labels
         np.array (K x zdim) of cluster centers
     '''
@@ -150,7 +174,7 @@ def combine_ind(N, sel1, sel2, kind='intersection'):
 
 def get_ind_for_cluster(labels, selected_clusters):
     '''Return index array of the selected clusters
-    
+
     Inputs:
         labels: np.array of cluster labels for each particle
         selected_clusters: list of cluster labels to select
@@ -175,10 +199,15 @@ def _get_colors(K, cmap=None):
         colors = ['C{}'.format(i) for i in range(10)]
         colors = [colors[i%len(colors)] for i in range(K)]
     return colors
-   
-def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels=None, alpha=.1, s=1):
+
+def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels=None, alpha=.1, s=1, xlim=None, ylim=None):
     fig, ax = plt.subplots()
     plt.scatter(x, y, alpha=alpha, s=s, rasterized=True)
+    if xlim is not None:
+        plt.xlim(xlim[0], xlim[1])
+    if ylim is not None:
+        plt.ylim(ylim[0], ylim[1])
+    plt.gca().set_aspect('equal')
 
     # plot cluster centers
     if centers_ind is not None:
@@ -223,7 +252,7 @@ def scatter_color(x, y, c, cmap='viridis', s=1, alpha=.1, label=None, figsize=No
         cbar.set_label(label)
     return fig, ax
 
-def plot_by_cluster(x, y, K, labels, centers=None, centers_ind=None, annotate=False, 
+def plot_by_cluster(x, y, K, labels, centers=None, centers_ind=None, annotate=False,
                     s=2, alpha=0.1, colors=None, cmap=None, figsize=None):
     fig, ax = plt.subplots(figsize=figsize)
     if type(K) is int:
@@ -251,7 +280,7 @@ def plot_by_cluster(x, y, K, labels, centers=None, centers_ind=None, annotate=Fa
             ax.annotate(str(i), centers[i,0:2])
     return fig, ax
 
-def plot_by_cluster_subplot(x, y, K, labels, 
+def plot_by_cluster_subplot(x, y, K, labels,
                             s=2, alpha=.1, colors=None, cmap=None, figsize=None):
     if type(K) is int:
         K = list(range(K))
@@ -287,8 +316,8 @@ def ipy_plot_interactive_annotate(df, ind, opacity=.3):
     else:
         text = [f'index {i}' for i in df.index] # hovertext
     xaxis, yaxis = df.columns[0], df.columns[1]
-    scatter = go.Scattergl(x=df[xaxis], 
-                           y=df[yaxis], 
+    scatter = go.Scattergl(x=df[xaxis],
+                           y=df[yaxis],
                            mode='markers',
                            text=text,
                            marker=dict(size=2,
@@ -305,27 +334,27 @@ def ipy_plot_interactive_annotate(df, ind, opacity=.3):
                             marker=dict(size=5,color='black'))
     f = go.FigureWidget([scatter,scatter2])
     f.update_layout(xaxis_title=xaxis, yaxis_title=yaxis)
-    
+
     def update_axes(xaxis, yaxis, color_by, colorscale):
         scatter = f.data[0]
         scatter.x = df[xaxis]
         scatter.y = df[yaxis]
-        
+
         scatter.marker.colorscale = colorscale
         if colorscale is None:
             scatter.marker.color = None
         else:
             scatter.marker.color = df[color_by] if color_by != 'index' else df.index
-    
+
         scatter2 = f.data[1]
         scatter2.x = sub[xaxis]
         scatter2.y = sub[yaxis]
         with f.batch_update(): # what is this for??
             f.layout.xaxis.title = xaxis
             f.layout.yaxis.title = yaxis
-        
-    widget = interactive(update_axes, 
-                    yaxis = df.select_dtypes('number').columns, 
+
+    widget = interactive(update_axes,
+                    yaxis = df.select_dtypes('number').columns,
                     xaxis = df.select_dtypes('number').columns,
                     color_by = df.columns,
                     colorscale = [None,'hsv','plotly3','deep','portland','picnic','armyrose'])
@@ -339,7 +368,7 @@ def ipy_plot_interactive(df, opacity=.3):
         text = [f'Class {k}: index {i}' for i,k in zip(df.index, df.labels)] # hovertext
     else:
         text = [f'index {i}' for i in df.index] # hovertext
-    
+
     xaxis, yaxis = df.columns[0], df.columns[1]
     f = go.FigureWidget([go.Scattergl(x=df[xaxis],
                                   y=df[yaxis],
@@ -359,7 +388,7 @@ def ipy_plot_interactive(df, opacity=.3):
         scatter = f.data[0]
         scatter.x = df[xaxis]
         scatter.y = df[yaxis]
-        
+
         scatter.marker.colorscale = colorscale
         if colorscale is None:
             scatter.marker.color = None
@@ -368,9 +397,9 @@ def ipy_plot_interactive(df, opacity=.3):
         with f.batch_update(): # what is this for??
             f.layout.xaxis.title = xaxis
             f.layout.yaxis.title = yaxis
- 
-    widget = interactive(update_axes, 
-                         yaxis=df.select_dtypes('number').columns, 
+
+    widget = interactive(update_axes,
+                         yaxis=df.select_dtypes('number').columns,
                          xaxis=df.select_dtypes('number').columns,
                          color_by = df.columns,
                          colorscale = [None,'hsv','plotly3','deep','portland','picnic','armyrose'])
@@ -390,13 +419,13 @@ def plot_projections(imgs, labels=None):
     fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(10,10))
     axes = axes.ravel()
     for i in range(min(len(imgs),9)):
-        axes[i].imshow(imgs[i], cmap='Greys_r') 
+        axes[i].imshow(imgs[i], cmap='Greys_r')
         axes[i].axis('off')
         if labels is not None:
             axes[i].set_title(labels[i])
     return fig, axes
 
-def gen_volumes(weights, config, zfile, outdir, cuda=None, 
+def gen_volumes(weights, config, zfile, outdir, cuda=None,
                 Apix=None, flip=False, downsample=None):
     '''Call cryodrgn eval_vol to generate volumes at specified z values
     Input:
@@ -420,7 +449,7 @@ def gen_volumes(weights, config, zfile, outdir, cuda=None,
         cmd = f'CUDA_VISIBLE_DEVICES={cuda} {cmd}'
     log(f'Running command:\n{cmd}')
     return subprocess.check_call(cmd, shell=True)
-    
+
 def load_dataframe(z=None, pc=None, euler=None, trans=None, labels=None, tsne=None, umap=None, **kwargs):
     '''Load results into a pandas dataframe for downstream analysis'''
     data = {}

@@ -55,7 +55,6 @@ def add_args(parser):
     group.add_argument('--pe-type', choices=('geom_ft','geom_full','geom_lowf','geom_nohighf','linear_lowf','none', 'vanilla'), help='Type of positional encoding')
     group.add_argument('--template-type', choices=('conv'), help='Type of template decoding method (default: %(default)s)')
     group.add_argument('--warp-type', choices=('blurmix', 'diffeo', 'deform'), help='Type of warp decoding method (default: %(default)s)')
-    group.add_argument('--global-warp', action='store_true', help='encode global warp')
     group.add_argument('--symm', help='Type of symmetry of the 3D volume (default: %(default)s)')
     group.add_argument('--num-struct', type=int, default=1, help='Num of structures (default: %(default)s)')
     group.add_argument('--deform-size', type=int, default=2, help='Num of structures (default: %(default)s)')
@@ -95,6 +94,17 @@ def main(args):
     zdim = cfg['model_args']['zdim']
     norm = cfg['dataset_args']['norm']
     lattice = Lattice(D, extent=0.5)
+    downfrac = cfg['dataset_args']['downfrac']
+    down_vol_size = cfg['model_args']['down_vol_size']
+    Apix = cfg['model_args']['Apix']
+    templateres = cfg['model_args']['templateres']
+    #args.Apix = down_vol_size/((D - 1)*downfrac*0.85)*Apix
+    downfrac = down_vol_size/((D-1)*downfrac)*Apix/args.Apix
+    log("Apix: changing from training apix {} to target apix {}".format(Apix, args.Apix))
+    log("the output volume by convnet will further downsample by downfrac: {} to achieve desired apix".format(downfrac))
+    assert templateres is not None
+    log("templateres: output volume of convnet is of size {}".format(templateres))
+    log("the final output volume rendered by spatial transformer is of size {}".format(int((D-1)*downfrac*0.85)))
 
     if args.downsample:
         assert args.downsample % 2 == 0, "Boxsize must be even"
@@ -104,11 +114,12 @@ def main(args):
     model = HetOnlyVAE(lattice, args.qlayers, args.qdim, args.players, args.pdim,
                 in_dim, args.zdim, encode_mode=args.encode_mode, enc_mask=enc_mask,
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
-                activation=activation, ref_vol=None, Apix=1.,
+                activation=activation, ref_vol=None, Apix=args.Apix,
                 template_type=args.template_type, warp_type=args.warp_type,
-                global_warp=args.global_warp, num_struct=args.num_struct,
+                num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=None,
-                deform_emb_size=args.deform_size)
+                deform_emb_size=args.deform_size, downfrac=downfrac,
+                templateres=templateres)
 
     vanilla = args.pe_type == "vanilla"
 
@@ -126,6 +137,25 @@ def main(args):
         # 3. load the new state dict
         model.load_state_dict(model_dict)
 
+        if vanilla:
+            pretrained_dict = checkpoint['encoder_state_dict']
+            model_dict = model.encoder.state_dict()
+            # 1. filter out unnecessary keys
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
+            # 2. overwrite entries in the existing state dict
+            model_dict.update(pretrained_dict)
+            # 3. load the new state dict
+            model.encoder.load_state_dict(model_dict)
+
+            pretrained_dict = checkpoint['decoder_state_dict']
+            model_dict = model.decoder.state_dict()
+            # 1. filter out unnecessary keys
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
+            # 2. overwrite entries in the existing state dict
+            model_dict.update(pretrained_dict)
+            # 3. load the new state dict
+            model.decoder.load_state_dict(model_dict)
+
     model = model.to(device)
 
     model.eval()
@@ -142,8 +172,9 @@ def main(args):
             z += args.z_start
         else:
             if vanilla:
-                z = utils.load_pkl(args.zfile)
-                z = torch.tensor(z).to(device)
+                #z = utils.load_pkl(args.zfile)
+                z = np.loadtxt(args.zfile).reshape(-1, zdim)
+                z = torch.tensor(z).float().to(device)
             else:
                 z = np.loadtxt(args.zfile).reshape(-1, zdim)
 
@@ -154,7 +185,7 @@ def main(args):
         for i,zz in enumerate(z):
             log(zz)
             if vanilla:
-                model.save_mrc(f'{args.o}/reference'+str(i), enc=zz)
+                model.save_mrc(f'{args.o}/reference'+str(i), enc=zz, Apix=args.Apix)
             else:
                 if args.downsample:
                     extent = lattice.extent * (args.downsample/(D-1))

@@ -11,7 +11,7 @@ from . import mrc
 from .mrc import LazyImage
 
 class Starfile():
-    
+
     def __init__(self, headers, df):
         assert headers == list(df.columns), f'{headers} != {df.columns}'
         self.headers = headers
@@ -44,7 +44,7 @@ class Starfile():
                     headers.append(line)
                 else:
                     break
-            break 
+            break
         # assume all subsequent lines until empty line is the body
         headers = [h.strip().split()[0] for h in headers]
         body = [line]
@@ -55,8 +55,8 @@ class Starfile():
         # put data into an array and instantiate as dataframe
         words = [l.strip().split() for l in body]
         words = np.array(words)
-        assert words.ndim == 2, f"Uneven # columns detected in parsing {set([len(x) for x in words])}. Is this a RELION 3.1 starfile?" 
-        assert words.shape[1] == len(headers), f"Error in parsing. Number of columns {words.shape[1]} != number of headers {len(headers)}" 
+        assert words.ndim == 2, f"Uneven # columns detected in parsing {set([len(x) for x in words])}. Is this a RELION 3.1 starfile?"
+        assert words.shape[1] == len(headers), f"Error in parsing. Number of columns {words.shape[1]} != number of headers {len(headers)}"
         data = {h:words[:,i] for i,h in enumerate(headers)}
         df = pd.DataFrame(data=data)
         return self(headers, df)
@@ -74,6 +74,20 @@ class Starfile():
             f.write(' '.join([str(v) for v in self.df.loc[i]]))
             f.write('\n')
         #f.write('\n'.join([' '.join(self.df.loc[i]) for i in range(len(self.df))]))
+
+    def write_subset(self, outstar, label):
+        f = open(outstar,'w')
+        f.write('# Created {}\n'.format(dt.now()))
+        f.write('\n')
+        f.write('data_\n\n')
+        f.write('loop_\n')
+        f.write('\n'.join(self.headers))
+        f.write('\n')
+        for i in self.df.index:
+            if label[i]:
+                # TODO: Assumes header and df ordering is consistent
+                f.write(' '.join([str(v) for v in self.df.loc[i]]))
+                f.write('\n')
 
     def get_particles(self, datadir=None, lazy=True):
         '''

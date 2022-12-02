@@ -42,8 +42,8 @@ The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In thi
 
 ## 80S ribosome <a name="80s"></a>
 The weight file can be downloaded from https://www.icloud.com/iclouddrive/0fab8AGmWkNjCsxVpasi-XsGg#weights.
-The other pkls for running [cryoViz](https://www.github.com/alncat/cryoViz) are deposited at https://drive.google.com/drive/folders/1D0kIP3kDhlhRx12jVUsZUObfHxsUn6NX?usp=share_link.
-These files are from the epoch 16 and trained with output volume of size 192. ```z.16.pkl``` stores the latent encodings for all particles. ```ribo_pose_euler.pkl``` is the pose parameter file. cryoViz will read configurations from ```config.pkl```. Put them in the same folder, you can then follow the [analyze result](#analysis) section to visualize the latent space.
+The other pkls for visualzing are deposited at https://drive.google.com/drive/folders/1D0kIP3kDhlhRx12jVUsZUObfHxsUn6NX?usp=share_link.
+These files are from the epoch 16 and trained with output volume of size 192. ```z.16.pkl``` stores the latent encodings for all particles. ```ribo_pose_euler.pkl``` is the pose parameter file. Our program will read configurations from ```config.pkl```. Put them in the same folder, you can then follow the [analyze result](#analysis) section to visualize the latent space.
 
 An exmaple UMAP of latent space for 80S ribosome:
 
@@ -63,8 +63,8 @@ A more colorful one, the particles are colored according to their projection cla
 
 ## Hrd1/Hrd3 complex <a name="hrd"></a>
 The weight file can be downloaded from https://www.icloud.com/iclouddrive/040I4UJjIpsWaCD2by_Df7PRQ#weights.
-The other pkls for running [cryoViz](https://www.github.com/alncat/cryoViz) are deposited at https://drive.google.com/drive/folders/1WdBwl_oSiy7fYPa0_HHUMVGLL0JZxVRz?usp=share_link.
-These files are from the epoch 15. ```z.15.pkl``` stores the latent encodings for all particles. ```hrd_pose_euler.pkl``` is the pose paramter file. cryoViz will read configurations from ```config.pkl```. Put them in the same folder, you can then follow the [analyze result](#analysis) section to visualize the latent space.
+The other pkls for running visualzing are deposited at https://drive.google.com/drive/folders/1WdBwl_oSiy7fYPa0_HHUMVGLL0JZxVRz?usp=share_link.
+These files are from the epoch 15. ```z.15.pkl``` stores the latent encodings for all particles. ```hrd_pose_euler.pkl``` is the pose paramter file. Our program will read configurations from ```config.pkl```. Put them in the same folder, you can then follow the [analyze result](#analysis) section to visualize the latent space.
 
 Another exmaple UMAP of latent space for Hrd1/Hrd3 complex [EMPIAR-10099](https://www.ebi.ac.uk/empiar/EMPIAR-10099/):
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapht.png?raw=true "Hrd1/Hrd3 UMAP")
@@ -118,7 +118,7 @@ suppose the run_data.star is located at ```/work/``` directory, where
 Next, you can prepare the ctf parameter file by executing:
 
 ```
-python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.35 -o hrd-ctf.pkl -o-g mtr-grp.pkl --ps 0
+python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.35 -o hrd-ctf.pkl -o-g hrd-grp.pkl --ps 0
 ```
 | argument | explanation|
 | --- | --- |
@@ -197,8 +197,9 @@ boths are in the output directory
 During training, opus-DSD will output temporary volumes called ```refx*.mrc```, you can check out the intermediate result by looking at them. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
 
 # analyze result <a name="analysis"></a>
-The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz . Sorry guys, i keep this in a sperate repo since these two programs are updated at different paces.
-Clone it and change to the directory contains cryoViz.
+You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following.
+(Deprecated! The analysis scripts are in another program, cryoViz, availabel at https://www.github.com/alncat/cryoViz . Sorry guys, i keep this in a sperate repo since these two programs are updated at different paces.
+Clone it and change to the directory contains cryoViz.)
 
 The first step is to sample the latent space using kmeans algorithm.
 
@@ -206,7 +207,7 @@ The first step is to sample the latent space using kmeans algorithm.
 sh analyze.sh /work/hrd 15 /work/hrd/hrd_pose_euler.pkl 20
 ```
 
-- The first argument after ```analyze.sh``` is the output directory used in training, which stores ```weights.*.pkl, z*.pkl, config.pkl```
+- The first argument after ```analyze.sh``` is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl```
 - the second argument is the epoch number you would like to analyze,
 - the third argument is the path of the pose parameter file you created before, which is used to color particles
 - the final argument is the number of clusters for kmeans clustering.
@@ -218,13 +219,13 @@ After running the above command once, you can skip umap embedding step by append
 You can generate the volume corresponds to each cluster centroid using
 
 ```
-sh eval_vol.sh /work/hrd/ 15 20 1 8
+sh eval_vol.sh /work/hrd/ 15 20 1.35 8
 ```
 
 - The first argument after eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
 - the second argument is the epoch number you just analyzed
 - the third argument is the number of kmeans clusters you used in analysis
-- the fourth argument is apix (which actually will be ignored in this version, it is a dummy variable, our program will read the real value from config!!)
+- the fourth argument is the apix of the generated volumes, you can specify a target value
 - the final argument is the dimension of latent space
 
 change to ```/work/hrd/analyze.15/kmeans20``` to checkout the reference*.mrc, which are the reconstructions
