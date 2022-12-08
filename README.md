@@ -92,11 +92,19 @@ You can create the conda environment for DSD using the spec-file in the folder a
 conda create --name dsd --file spec-file
 ```
 
+or using the environment.yml file in the folder by executing
+
+```
+conda env create --name dsd -f environment.yml
+```
+
 After the environment is sucessfully created, you can then activate it and using it to execute our program.
 
 ```
 conda activate dsd
 ```
+
+The inference pipeline of our program can run on any GPU which supports cuda 10.2 and is fast to generate a 3D volume. However, the training of our program takes larger amount memory, we recommend using V100 GPUs at least.
 
 # prepare data <a name="preparation"></a>
 
@@ -199,10 +207,10 @@ During training, opus-DSD will output temporary volumes called ```refx*.mrc```, 
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following.
 
-The first step is to sample the latent space using kmeans algorithm.
+The first step is to sample the latent space using kmeans algorithm. Suppose the results are in ```./data/ribo```,
 
 ```
-sh analyze.sh /work/hrd 15 /work/hrd/hrd_pose_euler.pkl 20
+sh analyze.sh ./data/ribo 16 ./data/ribo/ribo_pose_euler.pkl 16
 ```
 
 - The first argument after ```analyze.sh``` is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl```
@@ -210,14 +218,14 @@ sh analyze.sh /work/hrd 15 /work/hrd/hrd_pose_euler.pkl 20
 - the third argument is the path of the pose parameter file you created before, which is used to color particles
 - the final argument is the number of clusters for kmeans clustering.
 
-The analysis result will be stored in /work/hrd/analyze.15, i.e., the output directory plus the epoch number you analyzed, using the above command.
+The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command.
 
 After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap directly.
 
 You can generate the volume corresponds to each cluster centroid using
 
 ```
-sh eval_vol.sh /work/hrd/ 15 20 1.35 8
+sh eval_vol.sh ./data/ribo/ 16 16 1.77 8
 ```
 
 - The first argument after eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
@@ -226,13 +234,13 @@ sh eval_vol.sh /work/hrd/ 15 20 1.35 8
 - the fourth argument is the apix of the generated volumes, you can specify a target value
 - the final argument is the dimension of latent space
 
-change to ```/work/hrd/analyze.15/kmeans20``` to checkout the reference*.mrc, which are the reconstructions
+change to directory ```./data/ribo/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
 correspond to the cluster centroids.
 
 Finally, you can also retrieve the star files for images in each cluster using
 
 ```
-sh parse_pose.sh run_data.star 1.35 192 /work/hrd/ 15 20
+sh parse_pose.sh run_data.star 1.77 240 ./data/ribo/ 16 16
 ```
 
 - The first argument after ```parse_pose.sh``` is the star file of all images
@@ -242,4 +250,4 @@ sh parse_pose.sh run_data.star 1.35 192 /work/hrd/ 15 20
 - The fifth argument is the epoch number you just analyzed
 - The final argument is the number of kmeans clusters you used in analysis
 
-change to ```/work/hrd/analyze.15/kmeans20``` to checkout the starfile for images in each cluster.
+change to directory ```./data/ribo/analyze.16/kmeans16``` to checkout the starfile for images in each cluster.
