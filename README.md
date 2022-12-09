@@ -218,7 +218,7 @@ sh analyze.sh ./data/ribo 16 ./data/ribo/ribo_pose_euler.pkl 16
 - the third argument is the path of the pose parameter file you created before, which is used to color particles
 - the final argument is the number of clusters for kmeans clustering.
 
-The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command.
+The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in ./data/ribo/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in ./data/ribo/analyze.16/umap.png .
 
 After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap directly.
 

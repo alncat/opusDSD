@@ -66,6 +66,8 @@ class HetOnlyVAE(nn.Module):
             mask_frac = (ref_vol.shape[-1] - in_vol_min*2 + 6) / ref_vol.shape[-1]
             log("model: masking volume using fraction: {}".format(mask_frac))
             self.window_r = min(mask_frac, 0.95)
+            if templateres == 256:
+                self.window_r = min(self.window_r, 0.85)
         else:
             self.window_r = downfrac
         self.down_vol_size = int(self.render_size*self.window_r)//2*2
@@ -418,26 +420,40 @@ class ConvTemplate(nn.Module):
         inchannels, outchannels = 1024, 512
         template2.append(nn.ConvTranspose3d(inchannels, outchannels, 2, 2, 0))
         template2.append(nn.LeakyReLU(0.2))
-        self.template2 = nn.Sequential(*template2)
+        if self.templateres != templateres:
+            self.template2 = nn.Sequential(*template2)
 
-        inchannels, outchannels = 512, 256
-        template3 = []
-        template4 = []
-        for i in range(int(np.log2(templateres)) - 3):
-            if i < 3: #2:
-                template3.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
-                template3.append(nn.LeakyReLU(0.2))
-            else:
-                template4.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
-                template4.append(nn.LeakyReLU(0.2))
-            inchannels = outchannels
-            outchannels = inchannels//2 #max(inchannels // 2, 16)
-        self.template3 = nn.Sequential(*template3)
-        self.template4 = nn.Sequential(*template4)
+            inchannels, outchannels = 512, 256
+            template3 = []
+            template4 = []
+            for i in range(int(np.log2(templateres)) - 3):
+                if i < 3: #2:
+                    template3.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
+                    template3.append(nn.LeakyReLU(0.2))
+                else:
+                    template4.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
+                    template4.append(nn.LeakyReLU(0.2))
+                inchannels = outchannels
+                outchannels = inchannels//2 #max(inchannels // 2, 16)
+            self.template3 = nn.Sequential(*template3)
+            self.template4 = nn.Sequential(*template4)
+            for m in [self.template1, self.template2, self.template3, self.template4]:
+                utils.initseq(m)
+        else:
+            inchannels, outchannels = 512, 256
+            for i in range(int(np.log2(templateres)) - 3):
+                template2.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
+                template2.append(nn.LeakyReLU(0.2))
+                inchannels = outchannels
+                outchannels = inchannels//2 #max(inchannels // 2, 16)
+            self.template2 = nn.Sequential(*template2)
+            self.template3 = self.template4 = []
+            for m in [self.template1, self.template2]:
+                utils.initseq(m)
+
         self.conv_out = nn.ConvTranspose3d(inchannels, 1, 4, 2, 1)
         #self.conv_out = nn.Conv3d(inchannels, 1, 3, 1, 1)
-        for m in [self.template1, self.template2, self.template3, self.template4]:
-            utils.initseq(m)
+
         utils.initmod(self.conv_out, gain=1./np.sqrt(templateres//2))
 
         self.intermediate_size = int(32*self.templateres/256)
@@ -449,10 +465,13 @@ class ConvTemplate(nn.Module):
         #modules = [module for k, module in self.template2._modules.items()]
         #return checkpoint_sequential(modules, 2, self.template1(encoding).view(-1, 1024, 1, 1, 1))
         template2 = self.template2(self.template1(encoding).view(-1, 2048, 1, 1, 1))
-        template3 = self.template3(template2) #(B, 64, 32, 32, 32)
-        #can revise this to achieve other resolutions, current output of size 24*2^3
-        template3 = F.interpolate(template3, size=self.intermediate_size, mode="trilinear", align_corners=ALIGN_CORNERS)
-        template4 = self.template4(template3)
+        if self.templateres != 256:
+            template3 = self.template3(template2) #(B, 64, 32, 32, 32)
+            #can revise this to achieve other resolutions, current output of size 24*2^3
+            template3 = F.interpolate(template3, size=self.intermediate_size, mode="trilinear", align_corners=ALIGN_CORNERS)
+            template4 = self.template4(template3)
+        else:
+            template4 = template2
 
         return self.conv_out(template4), None
 
