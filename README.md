@@ -225,14 +225,13 @@ After running the above command once, you can skip umap embedding step by append
 You can generate the volume corresponds to each cluster centroid using
 
 ```
-sh eval_vol.sh ./data/ribo/ 16 16 1.77 8
+sh eval_vol.sh ./data/ribo/ 16 16 1.77
 ```
 
 - The first argument after eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
 - the second argument is the epoch number you just analyzed
 - the third argument is the number of kmeans clusters you used in analysis
 - the fourth argument is the apix of the generated volumes, you can specify a target value
-- the final argument is the dimension of latent space
 
 change to directory ```./data/ribo/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
 correspond to the cluster centroids.

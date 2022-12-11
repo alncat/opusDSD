@@ -112,7 +112,7 @@ def main(args):
     #create and load model
     activation={"relu": nn.ReLU, "leaky_relu": nn.LeakyReLU}[args.activation]
     model = HetOnlyVAE(lattice, args.qlayers, args.qdim, args.players, args.pdim,
-                in_dim, args.zdim, encode_mode=args.encode_mode, enc_mask=enc_mask,
+                in_dim, zdim, encode_mode=args.encode_mode, enc_mask=enc_mask,
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
                 activation=activation, ref_vol=None, Apix=args.Apix,
                 template_type=args.template_type, warp_type=args.warp_type,
