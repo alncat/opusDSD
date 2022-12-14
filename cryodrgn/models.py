@@ -45,7 +45,8 @@ class HetOnlyVAE(nn.Module):
             symm = None,
             render_size=140,
             downfrac=0.5,
-            templateres=192):
+            templateres=192,
+            tmp_prefix="ref"):
         super(HetOnlyVAE, self).__init__()
         self.lattice = lattice
         self.zdim = zdim
@@ -71,6 +72,8 @@ class HetOnlyVAE(nn.Module):
         else:
             self.window_r = downfrac
         self.down_vol_size = int(self.render_size*self.window_r)//2*2
+        self.encoder_image_size = int(self.render_size*110/self.down_vol_size)//2*2
+        log("model: image supplemented into encoder will be of size {}".format(self.encoder_image_size))
         self.ref_vol = ref_vol
 
         if encode_mode == 'conv':
@@ -102,7 +105,7 @@ class HetOnlyVAE(nn.Module):
             self.encoder = FixedEncoder(self.num_struct, self.zdim)
             self.fixed_deform = True
         elif encode_mode == 'grad':
-            self.encoder = Encoder(self.zdim, lattice.D, crop_vol_size=110, in_mask=ref_vol)
+            self.encoder = Encoder(self.zdim, lattice.D, crop_vol_size=110, in_mask=ref_vol, window_r=self.window_r)
             #self.shape_encoder = pose_encoder.PoseEncoder(image_size=128, mode="shape")
             self.fixed_deform = True
         else:
@@ -121,7 +124,7 @@ class HetOnlyVAE(nn.Module):
                                    warp_type=self.warp_type,
                                    symm=self.symm, ctf_grid=ctf_grid,
                                    fixed_deform=self.fixed_deform, deform_emb_size=self.deform_emb_size,
-                                   render_size=self.render_size, down_vol_size=self.down_vol_size)
+                                   render_size=self.render_size, down_vol_size=self.down_vol_size, tmp_prefix=tmp_prefix)
 
     @classmethod
     def load(self, config, weights=None, device=None):
@@ -369,7 +372,7 @@ def load_decoder(config, weights=None, device=None):
 
 def get_decoder(in_dim, D, layers, dim, domain, enc_type, enc_dim=None, activation=nn.ReLU, templateres=128,
                 ref_vol=None, Apix=1., template_type=None, warp_type=None,
-                symm=None, ctf_grid=None, fixed_deform=False, deform_emb_size=2, render_size=140, down_vol_size=140):
+                symm=None, ctf_grid=None, fixed_deform=False, deform_emb_size=2, render_size=140, down_vol_size=140, tmp_prefix="ref"):
     if enc_type == 'none':
         if domain == 'hartley':
             model = ResidLinearMLP(in_dim, layers, dim, 1, activation)
@@ -385,7 +388,7 @@ def get_decoder(in_dim, D, layers, dim, domain, enc_type, enc_dim=None, activati
                               symm_group=symm, ctf_grid=ctf_grid,
                               fixed_deform=fixed_deform,
                               deform_emb_size=deform_emb_size,
-                              zdim=in_dim - 3, render_size=render_size, down_vol_size=down_vol_size)
+                              zdim=in_dim - 3, render_size=render_size, down_vol_size=down_vol_size, tmp_prefix=tmp_prefix)
     else:
         model = PositionalDecoder if domain == 'hartley' else FTPositionalDecoder
         return model(in_dim, D, layers, dim, activation, enc_type=enc_type, enc_dim=enc_dim)
@@ -506,20 +509,22 @@ class AffineMixWeight(nn.Module):
         return out
 
 class Encoder(nn.Module):
-    def __init__(self, zdim, D, crop_vol_size, in_mask=None):
+    def __init__(self, zdim, D, crop_vol_size, in_mask=None, window_r=None):
         super(Encoder, self).__init__()
 
         self.zdim = zdim
         self.inchannels = 1
         self.vol_size = D - 1
         self.crop_vol_size = crop_vol_size #int(160*self.scale_factor)
+        self.window_r = window_r #(the cropping fraction of input mask)
         #downsample volume
         self.transformer_e = SpatialTransformer(self.crop_vol_size, render_size=self.crop_vol_size)
         self.out_dim = (self.crop_vol_size)//128 + 1
+        log("encoder: the input image size is {}".format(self.crop_vol_size))
         #downsample mask
         if in_mask is not None:
-            crop_mask_size = (int(in_mask.shape[-1]*(self.crop_vol_size/128))//2)*2
-            log("encoder: cropping mask from {} to {}".format(in_mask.shape, crop_mask_size))
+            crop_mask_size = (int(in_mask.shape[-1]*self.window_r)//2)*2 #(self.crop_vol_size/128) previous default
+            log("encoder: cropping mask from {} to {} using window {}".format(in_mask.shape, crop_mask_size, self.window_r))
             in_mask = self.transformer_e.crop(in_mask, crop_mask_size).unsqueeze(0).unsqueeze(0)
             # downsample
             in_mask = self.transformer_e.sample(in_mask)
@@ -821,7 +826,7 @@ class SpatialTransformer(nn.Module):
 class VanillaDecoder(nn.Module):
     def __init__(self, D, in_vol=None, Apix=1., template_type=None, templateres=256, warp_type=None, symm_group=None,
                  ctf_grid=None, fixed_deform=False, deform_emb_size=2, zdim=8, render_size=140,
-                 use_fourier=False, down_vol_size=140):
+                 use_fourier=False, down_vol_size=140, tmp_prefix="ref"):
         super(VanillaDecoder, self).__init__()
         self.D = D
         self.vol_size = (D - 1)
@@ -832,9 +837,9 @@ class VanillaDecoder(nn.Module):
         self.use_conv_template = False
         self.fixed_deform = fixed_deform
         self.crop_vol_size = down_vol_size
-        self.out_size = 128
         self.render_size = render_size
         self.use_fourier = use_fourier
+        self.tmp_prefix = tmp_prefix
 
         if symm_group is not None:
             self.symm_group = symm_groups.SymmGroup(symm_group)
@@ -881,6 +886,7 @@ class VanillaDecoder(nn.Module):
             self.fourier_transformer = healpix_sampler.SpatialTransformer(self.templateres, use_fourier=True, render_size=self.render_size)
         else:
             #crop_vol_size is the size of volume with density of interest, render_size is the size of output image after padding zeros
+            #render_size also is equal to the size of downsampled experimental image
             self.transformer = SpatialTransformer(self.crop_vol_size, render_size=self.render_size)
             self.fourier_transformer = None #healpix_sampler.SpatialTransformer(self.crop_vol_size, use_fourier=True, render_size=self.crop_vol_size)
             if in_vol is not None:
@@ -1436,9 +1442,9 @@ class VanillaDecoder(nn.Module):
             images = self.transformer.pad(images, self.render_size)
         if save_mrc:
             if self.use_fourier:
-                self.save_mrc(template_FT[0:1, ...], 'reference', flip=True)
+                self.save_mrc(template_FT[0:1, ...], self.tmp_prefix, flip=False)
             else:
-                self.save_mrc(template[0:1, ...], 'ref', flip=False)
+                self.save_mrc(template[0:1, ...], self.tmp_prefix, flip=False)
         return {"y_recon": images, "losses": losses, "y_ref": refs, "mask": masks, "euler_samples": euler_samples}
 
     def save_mrc(self, template, filename, flip=False):

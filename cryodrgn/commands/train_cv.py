@@ -47,6 +47,7 @@ def add_args(parser):
     parser.add_argument('--group-stat', metavar='pkl', type=os.path.abspath, help='group statistics (.pkl)')
     parser.add_argument('--load', metavar='WEIGHTS.PKL', help='Initialize training from a checkpoint')
     parser.add_argument('--split', metavar='pkl', help='Initialize training from a split checkpoint')
+    parser.add_argument('--valfrac', type=float, default=0.1, help='the fraction of images held for validation')
     parser.add_argument('--checkpoint', type=int, default=1, help='Checkpointing interval in N_EPOCHS (default: %(default)s)')
     parser.add_argument('--log-interval', type=int, default=1000, help='Logging interval in N_IMGS (default: %(default)s)')
     parser.add_argument('-v','--verbose',action='store_true',help='Increaes verbosity')
@@ -73,13 +74,14 @@ def add_args(parser):
     group.add_argument('-b','--batch-size', type=int, default=8, help='Minibatch size (default: %(default)s)')
     group.add_argument('--wd', type=float, default=0, help='Weight decay in Adam optimizer (default: %(default)s)')
     group.add_argument('--lr', type=float, default=1e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
-    group.add_argument('--lamb', type=float, default=1, help='penalty for umap prior (default: %(default)s)')
+    group.add_argument('--lamb', type=float, default=0.8, help='restraint strength for umap prior (default: %(default)s)')
     group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
     group.add_argument('--bfactor', type=float, default=3., help='apply bfactor (default: %(default)s) to reconstruction')
-    group.add_argument('--beta', default=None, help='Choice of beta schedule or a constant for KLD weight (default: 1/zdim)')
-    group.add_argument('--beta-control', type=float, help='KL-Controlled VAE gamma. Beta is KL target. (default: %(default)s)')
+    group.add_argument('--beta', default='cos', help='Choice of beta schedule')
+    group.add_argument('--beta-control', default=0.5, type=float, help='restraint strength for KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
+    group.add_argument('--tmp-prefix', type=str, default='tmp', help='prefix for naming intermediate reconstructions')
     group.add_argument('--amp', action='store_true', help='Use mixed-precision training')
     group.add_argument('--multigpu', action='store_true', help='Parallelize training across all detected GPUs')
     group.add_argument('--num-gpus', type=int, default=1, help='number of gpus used for training')
@@ -130,7 +132,6 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
         model.eval()
     if trans is not None:
         y, yt = preprocess_input(y, yt, lattice, trans, vanilla=vanilla)
-    mask = 70
     z_mu, z_logstd, z, y_recon, y_recon_tilt, losses, y, y_ffts, mus, euler_samples, y_recon_ori, neg_mus, mask_sum = run_batch(
                                                                  model, lattice, y, yt, rot,
                                                                  tilt=tilt, ind=ind, ctf_params=ctf_params,
@@ -138,13 +139,13 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                                                                  grid=grid, save_image=save_image,
                                                                  group_stat=group_stat, do_scale=do_scale,
                                                                  trans=trans, it=it, enc=enc,
-                                                                 args=args, mask=mask,
+                                                                 args=args,
                                                                  euler=euler,
                                                                  posetracker=posetracker, data=data)
     if update_params:
         optim.zero_grad()
 
-    loss, gen_loss, kld, mu2, std2, mmd, c_mmd, top_euler = loss_function(z_mu, z_logstd, y, yt, y_recon, mask,
+    loss, gen_loss, snr, mu2, std2, mmd, c_mmd, top_euler, mse = loss_function(z_mu, z_logstd, y, yt, y_recon,
                                         beta, y_recon_tilt, beta_control, vanilla=vanilla,
                                         group_stat=group_stat, ind=ind, mask_sum=mask_sum,
                                         losses=losses, args=args, it=it, y_ffts=y_ffts, zs=z,
@@ -160,10 +161,10 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
         loss.backward()
     if update_params:
         optim.step()
-    return z_mu, loss.item(), gen_loss.item(), kld.item()/args.zdim, losses['l2'].mean().item(), losses['tvl2'].mean().item(), \
-            mu2.item()/args.zdim, std2.item()/args.zdim, mmd.item(), c_mmd.item()
+    return z_mu, loss.item(), gen_loss.item(), snr.item(), losses['l2'].mean().item(), losses['tvl2'].mean().item(), \
+            mu2.item()/args.zdim, std2.item()/args.zdim, mmd.item(), c_mmd.item(), mse.item()
 
-def data_augmentation(y, trans, ctf_grid, mask, grid, window_r, downfrac=0.5):
+def data_augmentation(y, trans, ctf_grid, grid, window_r, downfrac=0.5):
     with torch.no_grad():
         y_fft = fft.torch_fft2_center(y)
         # undo experimental image translation
@@ -212,7 +213,7 @@ def _unparallelize(model):
         return model.module
     return model
 
-def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, mask, grid, args, W, out_size):
+def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, grid, args, W, out_size):
     device = euler.get_device()
     B = euler.shape[0]
     mus, idices, top_mus, neg_mus = posetracker.sample_neighbors(euler.cpu(), ind.cpu(), num_pose=8)
@@ -228,14 +229,14 @@ def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, m
 def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
               yr=None, vanilla=True, ctf_grid=None, grid=None, save_image=False,
               group_stat=None, do_scale=True, trans=None, it=None, enc=None,
-              args=None, mask=None, euler=None, posetracker=None, data=None):
+              args=None, euler=None, posetracker=None, data=None):
     use_tilt = yt is not None
     use_ctf = ctf_params is not None
     B = y.size(0)
     D = lattice.D
     W = y.size(-1)
     out_size = D - 1
-    y, y_fft = data_augmentation(y, trans.unsqueeze(1), ctf_grid, mask, grid, args.window_r, downfrac=args.downfrac)
+    y, y_fft = data_augmentation(y, trans.unsqueeze(1), ctf_grid, grid, args.window_r, downfrac=args.downfrac)
     # get real mask
     mask_real = grid.get_circular_mask(args.window_r)
     mask_real = utils.crop_image(mask_real, out_size)
@@ -281,7 +282,8 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
                 # undo experimental image translation
                 #y_fft_mask = ctf_grid.translate_ft(y_fft, -trans)
                 y_fft_s    = torch.fft.fftshift(y_fft, dim=(-2))
-                y_fft_crop = utils.crop_fft(y_fft_s, 128)*(128/out_size)**2
+                #downsample image, previous default is 128
+                y_fft_crop = utils.crop_fft(y_fft_s, model.encoder_image_size)*(model.encoder_image_size/out_size)**2
                 y_fft_crop = torch.fft.ifftshift(y_fft_crop, dim=(-2))
                 #diff = y_fft_masked * c.unsqueeze(1)
                 #diff /= (c.pow(2).unsqueeze(1) + 0.5)
@@ -307,7 +309,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         # sample nearest neighbors
         posetracker.set_emb(encout["z_mu"], ind)
         mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
-                                                ind, ctf_params, ctf_grid, mask, grid, args, W, out_size)
+                                                ind, ctf_params, ctf_grid, grid, args, W, out_size)
         mus = mus.to(z.get_device())
         neg_mus = neg_mus.to(z.get_device())
         others = None
@@ -390,7 +392,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
 
     return z_mu, z_logstd, z, y_recon, y_recon_tilt, losses, y_ref, y_ffts, mus, euler_samples, y_recon_ori, neg_mus, mask_sum
 
-def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
+def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
                   y_recon_tilt=None, beta_control=None, vanilla=False,
                   group_stat=None, ind=None, mask_sum=None, losses=None,
                   args=None, it=None, y_ffts=None, zs=None, mus=None,
@@ -426,7 +428,14 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
 
             #print(top_euler)
             #print(probs, euler_samples)
-            em_l2_loss = ((l2_diff*probs/mask_sum).sum(-1)).mean()
+            em_l2_loss = ((l2_diff*probs/mask_sum).sum(-1))#.mean()
+            #calculate snr
+            #print(y.shape, em_l2_loss.shape, mask_sum.shape, y.pow(2).sum(dim=(-1,-2)))
+            y2  = y.pow(2).sum(dim=(-1,-2)).squeeze()/mask_sum.squeeze()
+            mse = em_l2_loss.detach() + y2
+            #print(mse.shape, y2.shape)
+            snr = (1. - (mse/y2).mean())
+            em_l2_loss = em_l2_loss.mean()
             #print(em_l2_loss)
         else:
             em_l2_loss = (-2.*y_recon*y + y_recon**2).sum(dim=(-1,-2))
@@ -461,55 +470,49 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
     # set a unified mask_sum
     mask_sum = mask_sum.max()
     #mask_sum = (70*2)**2
-    if beta_control is None:
-        if not vanilla:
-            loss = gen_loss + beta*kld/mask.sum().float()
-        else:
-            loss = gen_loss + beta*kld/mask_sum + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/mask_sum
+    if not vanilla:
+        loss = gen_loss + beta_control*(beta-kld)**2/mask.sum().float()
     else:
-        if not vanilla:
-            loss = gen_loss + beta_control*(beta-kld)**2/mask.sum().float()
-        else:
-            #loss = gen_loss + 1e-4*beta_control*beta*kld/mask_sum.float() + beta_control*beta*1e-5*torch.mean(losses['tvl2'] + 1e-1*losses['l2'])
-            #alpha = 0.005*beta #0.01*beta
-            lamb = args.lamb #.5 #10 1 0.02
-            eps = 1e-3
-            kld, mu2 = utils.compute_kld(z_mu, z_logstd)
-            cross_corr = utils.compute_cross_corr(z_mu)
-            loss = gen_loss + beta_control*beta*(kld)/mask_sum + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
-            #loss = loss + 2.*pairKLD/(B*B*C*mask_sum)*alpha
-            # compute mmd
-            #mmd = utils.compute_smmd(z_mu, z_logstd, s=.5)
-            #c_mmd = utils.compute_cross_smmd(z_mu, mus, s=1/16, adaptive=False)
-            # matching z dim to image space
-            # compute cross entropy
-            c_en = (z_mu.unsqueeze(1) - mus).pow(2).sum(-1) + eps #(B, P)
-            c_neg_en = (z_mu.unsqueeze(1) - neg_mus).pow(2).sum(-1) + eps #(B, N)
-            #prob = ((-c_en).exp() + eps)/((-c_en).exp() + (-c_neg_en).exp().sum(-1, keepdim=True) + eps)
-            #print(c_en.shape, c_neg_en.shape, prob.shape)
-            #c_mmd = -torch.log(prob).mean()
-            c_mmd = torch.log(1 + c_en).mean() + 3*torch.log(1 + 1./c_neg_en).mean()
-            # compute cross entropy based on deconvoluted image
-            #deconv_recon = y_recon_ori[:,0,...]
-            #deconv_recon = utils.downsample_image(deconv_recon, deconv_recon.shape[-1]//2)
-            #probs = deconv_recon.unsqueeze(1) - deconv_recon.unsqueeze(0)
-            #probs = (probs.pow(2).mean(dim=(-1, -2)))
-            #probs_med = torch.median(probs).detach() #(n)
-            #probs = (-probs/probs_med).exp()
-            # spread probs
-            diff = (z_mu.unsqueeze(1) - z_mu.unsqueeze(0)).pow(2).sum(dim=(-1)) + eps
-            #spread_probs = (-diff).exp()
-            #spread_probs = (spread_probs + eps)/(spread_probs.sum(-1) + eps)
-            #mmd = -torch.log(spread_probs).mean()
-            diag_mask = (~torch.eye(B, dtype=bool).to(z_mu.get_device())).float()
-            mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
-            mmd = mmd.mean()
-            #print("c_mmd: ", c_mmd, "mmd: ", mmd)
-            loss += lamb*(c_mmd + mmd + 0.5*cross_corr)*beta/mask_sum
-            if "knn" in losses:
-                loss += lamb*losses["knn"]*beta/mask_sum
-            #loss = loss/(1 + lamb*beta)
-            #print(mmd)
+        #loss = gen_loss + 1e-4*beta_control*beta*kld/mask_sum.float() + beta_control*beta*1e-5*torch.mean(losses['tvl2'] + 1e-1*losses['l2'])
+        #alpha = 0.005*beta #0.01*beta
+        lamb = args.lamb #.5 #10 1 0.02
+        eps = 1e-3
+        kld, mu2 = utils.compute_kld(z_mu, z_logstd)
+        cross_corr = utils.compute_cross_corr(z_mu)
+        loss = gen_loss + beta_control*beta*(kld)/mask_sum + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
+        #loss = loss + 2.*pairKLD/(B*B*C*mask_sum)*alpha
+        # compute mmd
+        #mmd = utils.compute_smmd(z_mu, z_logstd, s=.5)
+        #c_mmd = utils.compute_cross_smmd(z_mu, mus, s=1/16, adaptive=False)
+        # matching z dim to image space
+        # compute cross entropy
+        c_en = (z_mu.unsqueeze(1) - mus).pow(2).sum(-1) + eps #(B, P)
+        c_neg_en = (z_mu.unsqueeze(1) - neg_mus).pow(2).sum(-1) + eps #(B, N)
+        #prob = ((-c_en).exp() + eps)/((-c_en).exp() + (-c_neg_en).exp().sum(-1, keepdim=True) + eps)
+        #print(c_en.shape, c_neg_en.shape, prob.shape)
+        #c_mmd = -torch.log(prob).mean()
+        c_mmd = torch.log(1 + c_en).mean() + 3*torch.log(1 + 1./c_neg_en).mean()
+        # compute cross entropy based on deconvoluted image
+        #deconv_recon = y_recon_ori[:,0,...]
+        #deconv_recon = utils.downsample_image(deconv_recon, deconv_recon.shape[-1]//2)
+        #probs = deconv_recon.unsqueeze(1) - deconv_recon.unsqueeze(0)
+        #probs = (probs.pow(2).mean(dim=(-1, -2)))
+        #probs_med = torch.median(probs).detach() #(n)
+        #probs = (-probs/probs_med).exp()
+        # spread probs
+        diff = (z_mu.unsqueeze(1) - z_mu.unsqueeze(0)).pow(2).sum(dim=(-1)) + eps
+        #spread_probs = (-diff).exp()
+        #spread_probs = (spread_probs + eps)/(spread_probs.sum(-1) + eps)
+        #mmd = -torch.log(spread_probs).mean()
+        diag_mask = (~torch.eye(B, dtype=bool).to(z_mu.get_device())).float()
+        mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
+        mmd = mmd.mean()
+        #print("c_mmd: ", c_mmd, "mmd: ", mmd)
+        loss += lamb*(c_mmd + mmd + 0.5*cross_corr)*beta/mask_sum
+        if "knn" in losses:
+            loss += lamb*losses["knn"]*beta/mask_sum
+        #loss = loss/(1 + lamb*beta)
+        #print(mmd)
 
     if it % (args.log_interval*8) == B and args.plot:
             #group_stat.plot_variance(ind[0])
@@ -517,7 +520,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
             #print(logvar_diff.mean().detach(), z_mu_diff2.mean().detach(), var_diff.mean().detach())
             plt.show()
 
-    return loss, gen_loss, losses["knn"], mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler
+    return loss, gen_loss, snr, mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler, mse.mean()
 
 def eval_z(model, lattice, data, batch_size, device, trans=None, use_tilt=False, ctf_params=None, use_real=False):
     assert not model.training
@@ -658,12 +661,7 @@ def main(args):
         log('WARNING: No GPUs detected')
 
     # set beta schedule
-    if args.beta is None:
-        args.beta = 1.
-    try:
-        args.beta = float(args.beta)
-    except ValueError:
-        assert args.beta_control, "Need to set beta control weight for schedule {}".format(args.beta)
+    assert args.beta_control, "Need to set beta control weight for schedule {}".format(args.beta)
     beta_schedule = get_beta_schedule(args.beta)
 
     # load index filter
@@ -786,11 +784,11 @@ def main(args):
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
                 activation=activation, ref_vol=ref_vol, Apix=ctf_params[0,0],
                 template_type=args.template_type, warp_type=args.warp_type,
-                num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=ctf_grid,
                 deform_emb_size=args.deform_size,
                 downfrac=args.downfrac,
-                templateres=args.templateres)
+                templateres=args.templateres,
+                tmp_prefix=args.tmp_prefix)
 
 
     flog(model)
@@ -908,8 +906,8 @@ def main(args):
     else:
         log(f'loading train validation split from {args.split}')
         rand_split = torch.load(args.split)
-    Nimg_train = int(Nimg*0.9)
-    Nimg_test = int(Nimg*0.1)
+    Nimg_train = int(Nimg*(1. - args.valfrac))
+    Nimg_test = int(Nimg*args.valfrac)
     train_split, val_split = rand_split[:Nimg_train], rand_split[Nimg_train:]
     train_sampler = dataset.ClassSplitBatchSampler(args.batch_size, posetracker.poses_ind, train_split)
     val_sampler = dataset.ClassSplitBatchSampler(args.batch_size, posetracker.poses_ind, val_split)
@@ -931,21 +929,22 @@ def main(args):
         t2 = dt.now()
         gen_loss_accum = 0
         loss_accum = 0
-        kld_accum = 0
+        snr_accum = 0
         eq_loss_accum = 0
         batch_it = 0
-        beta_control = args.beta_control
         # moving average
         ema_mu = 0.99
         gen_loss_ema, gen_loss_var_ema = 0.0, 0.
-        kld_ema = 2
-        kld_var_ema = 1
+        snr_ema = 0.0025
+        mse_ema = 0.01
+        mse_var_ema = 0.1
         mmd_ema = 0.
         mmd_var_ema = 0.1
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
-
+        beta_control = args.beta_control
         log('learning rate {} for epoch {}'.format(lr_scheduler.get_last_lr(), epoch))
+
         for minibatch in data_generator:
             ind = minibatch[-1].to(device)
             y = minibatch[0].to(device)
@@ -957,6 +956,7 @@ def main(args):
             global_it = Nimg_train*epoch + batch_it
             save_image = (batch_it % (args.log_interval*4)) == 0
 
+            beta_control = args.beta_control*snr_ema
             beta = beta_schedule(global_it)
 
             yr = torch.from_numpy(data.particles_real[ind.numpy()]).to(device) if args.use_real else None
@@ -969,7 +969,7 @@ def main(args):
             euler = euler.to(device)
             #print(euler)
             #ctf_param = ctf_params[ind] if ctf_params is not None else None
-            z_mu, loss, gen_loss, kld, l1_loss, tv_loss, mu2, std2, mmd, c_mmd = \
+            z_mu, loss, gen_loss, snr, l1_loss, tv_loss, mu2, std2, mmd, c_mmd, mse = \
                                         train_batch(model, lattice, y, yt, rot, tran, optim, beta,
                                               beta_control=beta_control, tilt=tilt, ind=ind,
                                               grid=grid, ctf_params=ctf_params, ctf_grid=ctf_grid,
@@ -985,13 +985,15 @@ def main(args):
             #    posetracker.set_emb(z_mu, ind)
 
             # logging
-            # compute moving average of generator loss, kld, and mmd
+            # compute moving average of generator loss, snr, and mmd
+            delta         = snr - snr_ema
+            snr_ema += (1-ema_mu)*delta
             delta         = gen_loss - gen_loss_ema
             gen_loss_ema += (1-ema_mu)*delta
             gen_loss_var_ema = ema_mu*(gen_loss_var_ema + (1-ema_mu)*delta**2)
-            delta         = kld - kld_ema
-            kld_ema += (1-ema_mu)*delta
-            kld_var_ema = ema_mu*(kld_var_ema + (1-ema_mu)*delta**2)
+            delta         = mse - mse_ema
+            mse_ema += (1-ema_mu)*delta
+            mse_var_ema = ema_mu*(mse_var_ema + (1-ema_mu)*delta**2)
             delta         = mmd - mmd_ema
             mmd_ema += (1-ema_mu)*delta
             mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
@@ -1000,19 +1002,19 @@ def main(args):
             c_mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
 
             gen_loss_accum += gen_loss*B
-            kld_accum += kld*B
+            snr_accum += snr*B
             loss_accum += loss*B
 
             if batch_it % args.log_interval == 0:
                 log('# [Train Epoch: {}/{}] [{}/{} images] ' #gen_loss={:.6f}, '\
-                    'kld={:.3f}, beta={:.3f}, '                               \
+                    'snr2_mu={:.3f}, beta={:.3f}, '                               \
                     'loss={:.4f}, l1={:.3f}, tv={:.3f}, '                     \
                     'mu={:.3f}, std={:.3f}, gen_loss_mu={:.4f}, ' \
-                    'gen_loss_std={:.3f}, kld_mu={:.3f}, kld_std={:.3f}, ' \
-                    'mmd_mu={:.4f}, mmd_std={:.4f}, c_mmd_mu={:.4f}, c_mmd_std={:.4f}'.format(epoch+1, num_epochs, batch_it,
-                                                    Nimg_train, kld, beta, loss, l1_loss, tv_loss,
+                    'gen_loss_std={:.3f}, mse_mu={:.3f}, mse_std={:.3f}, ' \
+                    'barlow_mu={:.4f}, barlow_std={:.4f}, c_mmd_mu={:.4f}, c_mmd_std={:.4f}'.format(epoch+1, num_epochs, batch_it,
+                                                    Nimg_train, snr_ema, beta, loss, l1_loss, tv_loss,
                                                      np.sqrt(mu2), np.sqrt(std2), gen_loss_ema, np.sqrt(gen_loss_var_ema),
-                                                    kld_ema, np.sqrt(kld_var_ema), mmd_ema, np.sqrt(mmd_var_ema), c_mmd_ema, np.sqrt(c_mmd_var_ema)))
+                                                    mse_ema, np.sqrt(mse_var_ema), mmd_ema, np.sqrt(mmd_var_ema), c_mmd_ema, np.sqrt(c_mmd_var_ema)))
             if batch_it % (args.log_interval*10) == 0:
                 out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
                 log('save {}'.format(out_z))
@@ -1021,13 +1023,13 @@ def main(args):
                 log('save {}'.format(out_pose))
                 posetracker.save(out_pose)
 
-        flog('# =====> Epoch: {} Average training gen_loss = {:.6}, KLD = {:.6f}, '\
+        flog('# =====> Epoch: {} Average training gen_loss = {:.6}, SNR2 = {:.6f}, '\
              'total loss = {:.6f}; Finished in {}'.format(epoch+1,
                                                          gen_loss_accum/Nimg_train,
-                                                         kld_accum/Nimg_train, loss_accum/Nimg_train, dt.now()-t2))
+                                                         snr_accum/Nimg_train, loss_accum/Nimg_train, dt.now()-t2))
 
         # validation
-        gen_loss_accum, kld_accum, loss_accum = 0, 0, 0
+        gen_loss_accum, snr_accum, loss_accum = 0, 0, 0
         for minibatch in val_data_generator:
             ind = minibatch[-1].to(device)
             y = minibatch[0].to(device)
@@ -1046,7 +1048,7 @@ def main(args):
             tran = tran.to(device)
             euler = euler.to(device)
             #ctf_param = ctf_params[ind] if ctf_params is not None else None
-            z_mu, loss, gen_loss, kld, l1_loss, tv_loss, mu2, std2, mmd, c_mmd = \
+            z_mu, loss, gen_loss, snr, l1_loss, tv_loss, mu2, std2, mmd, c_mmd, mse = \
                                         train_batch(model, lattice, y, yt, rot, tran, optim, beta,
                                               beta_control=beta_control, tilt=tilt, ind=ind,
                                               grid=grid, ctf_params=ctf_params, ctf_grid=ctf_grid,
@@ -1059,13 +1061,13 @@ def main(args):
                 pose_optimizer.step()
             # logging
             gen_loss_accum += gen_loss*B
-            kld_accum += kld*B
+            snr_accum += snr*B
             loss_accum += loss*B
 
-        flog('# =====> Epoch: {} Average validation gen_loss = {:.6}, KLD = {:.6f}, '\
+        flog('# =====> Epoch: {} Average validation gen_loss = {:.6}, SNR2 = {:.6f}, '\
              'total loss = {:.6f}; Finished in {}'.format(epoch+1,
                                                          gen_loss_accum/Nimg_test,
-                                                         kld_accum/Nimg_test, loss_accum/Nimg_test, dt.now()-t2))
+                                                         snr_accum/Nimg_test, loss_accum/Nimg_test, dt.now()-t2))
 
 
         if args.checkpoint and epoch % args.checkpoint == 0:
