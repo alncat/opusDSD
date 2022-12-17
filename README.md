@@ -154,7 +154,7 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --split hrd-split.pkl --bfactor 4.
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --split hrd-split.pkl --bfactor 6.
 ```
 
 The meaning of each argument is explained as follows:
@@ -169,16 +169,16 @@ The meaning of each argument is explained as follows:
 | --lr    | the initial learning rate for adam optimizer, 1.e-4 should work, but you may use larger lr for dataset with higher SNR |
 | --num-gpus | the number of gpus used for training, note that the total number of images in the total batch will be n*num-gpus |
 | --multigpu |toggle on the data parallel version |
-| --beta-control |the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint. The scale of beta-control should be propotional to the SNR of dataset. Suitable beta-control might help disentanglement by increasing the magnitude of latent encodings, for more details, check out [beta vae paper](https://openreview.net/forum?id=Sy2fzU9gl). In our implementation, we adjust the scale beta-control automatically based on SNR estimation, possible ranges of this argument are [0.5-0.8]|
+| --beta-control |the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint. The scale of beta-control should be propotional to the SNR of dataset. Suitable beta-control might help disentanglement by increasing the magnitude of latent encodings and the sparsity of latent encodings, for more details, check out [beta vae paper](https://openreview.net/forum?id=Sy2fzU9gl). In our implementation, we adjust the scale of beta-control automatically based on SNR estimation, possible ranges of this argument are [0.5-2.]. You can use larger beta-control for dataset with higher SNR|
 | --beta |the schedule for restraint stengths, ```cos``` implements the [cyclic annealing schedule](https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/) |
 | -o | the directory name for storing results, such as model weights, latent encodings |
 | -r | the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
 | --downfrac | the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D\*downfrac. You can set it according to resolution of consensus model. We only support D\*downfrac >= 128 so far (I may fix this behavior later) |
-| --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it if the training yields spurious result. Possible ranges are [0.1, 1.5]|
+| --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider halving it. Possible ranges are [0.1, 1.5]|
 | --log-interval | the logging interval, the program will output some statistics after the specified steps, set is to multiples of num-gpus\*b |
 | --split | the filename for storing the train-validation split of image stack |
 | --valfrac | the fraction of images in the validation set, default is 0.1 |
-| --bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate, possible ranges are [2, 4] |
+| --bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate, possible ranges are [3, 8]. We will decay the bfactor every epoch. This is equivalent to learning rate warming up. |
 | --templateres | the size of output volume of our convolutional network, it will be further resampled by spatial transformer before projecting to 2D images. The default value is 192. You can tweak it to other resolutions, larger resolutions can generate smoother density maps when downsampled from the output volume |
 | --plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will display the 2D reconstructions and experimental images after 8 times logging intervals |
 | --tmp-prefix | the prefix of intermediate reconstructions, default is ```tmp``` |
@@ -196,11 +196,12 @@ Happy Training! Contact us if you run into any troubles, since we may miss certa
 To restart execution from a checkpoint, you can use
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 0.01 --beta cos -o /work/output -r ./mask.mrc --downfrac 0.5 --lamb 0.5 --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
 ```
-
-- --load, the weight checkpoint from the restarting epoch
-- --latents, the latent encodings from the restarting epoch
+| argument |  explanation |
+| --- | --- |
+| --load | the weight checkpoint from the restarting epoch |
+| --latents | the latent encodings from the restarting epoch |
 
 boths are in the output directory
 
