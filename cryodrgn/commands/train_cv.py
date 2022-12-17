@@ -7,6 +7,7 @@ import sys, os
 import argparse
 import pickle
 from datetime import datetime as dt
+import math
 
 import torch
 import torch.nn as nn
@@ -98,7 +99,7 @@ def add_args(parser):
     group = parser.add_argument_group('Encoder Network')
     group.add_argument('--enc-layers', dest='qlayers', type=int, default=3, help='Number of hidden layers (default: %(default)s)')
     group.add_argument('--enc-dim', dest='qdim', type=int, default=256, help='Number of nodes in hidden layers (default: %(default)s)')
-    group.add_argument('--encode-mode', default='resid', choices=('conv','resid','mlp','tilt',
+    group.add_argument('--encode-mode', default='grad', choices=('conv','resid','mlp','tilt',
                                                                   'fixed', 'affine', 'fixed_blur', 'deform', 'grad',
                                                                   'vq'),
                                             help='Type of encoder network (default: %(default)s)')
@@ -124,7 +125,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                 beta_control=None, tilt=None, ind=None, grid=None, ctf_grid=None,
                 ctf_params=None, yr=None, use_amp=False, save_image=False, vanilla=True,
                 group_stat=None, do_scale=False, it=None, enc=None,
-                args=None, euler=None, posetracker=None, data=None, update_params=True):
+                args=None, euler=None, posetracker=None, data=None, update_params=True, snr2=None):
 
     if update_params:
         model.train()
@@ -149,7 +150,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                                         beta, y_recon_tilt, beta_control, vanilla=vanilla,
                                         group_stat=group_stat, ind=ind, mask_sum=mask_sum,
                                         losses=losses, args=args, it=it, y_ffts=y_ffts, zs=z,
-                                        mus=mus, neg_mus=neg_mus, y_recon_ori=y_recon_ori, euler_samples=euler_samples)
+                                        mus=mus, neg_mus=neg_mus, y_recon_ori=y_recon_ori, euler_samples=euler_samples, snr2=snr2)
 
     if top_euler is not None and not update_params:
         posetracker.set_euler(top_euler, ind)
@@ -396,7 +397,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
                   y_recon_tilt=None, beta_control=None, vanilla=False,
                   group_stat=None, ind=None, mask_sum=None, losses=None,
                   args=None, it=None, y_ffts=None, zs=None, mus=None,
-                  neg_mus=None, y_recon_ori=None, euler_samples=None):
+                  neg_mus=None, y_recon_ori=None, euler_samples=None, snr2=None):
     # reconstruction error
     use_tilt = yt is not None
     B = y.size(0)
@@ -486,6 +487,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         #c_mmd = utils.compute_cross_smmd(z_mu, mus, s=1/16, adaptive=False)
         # matching z dim to image space
         # compute cross entropy
+        a, b = 1.577, 0.8951
         c_en = (z_mu.unsqueeze(1) - mus).pow(2).sum(-1) + eps #(B, P)
         c_neg_en = (z_mu.unsqueeze(1) - neg_mus).pow(2).sum(-1) + eps #(B, N)
         #prob = ((-c_en).exp() + eps)/((-c_en).exp() + (-c_neg_en).exp().sum(-1, keepdim=True) + eps)
@@ -508,9 +510,9 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
         mmd = mmd.mean()
         #print("c_mmd: ", c_mmd, "mmd: ", mmd)
-        loss += lamb*(c_mmd + mmd + 0.5*cross_corr)*beta/mask_sum
+        loss += lamb*(c_mmd + mmd + 0.5*cross_corr)*((beta+0.05)/1.05)/mask_sum
         if "knn" in losses:
-            loss += lamb*losses["knn"]*beta/mask_sum
+            loss += lamb*losses["knn"]*((beta+0.05)/1.05)/mask_sum
         #loss = loss/(1 + lamb*beta)
         #print(mmd)
 
@@ -925,6 +927,8 @@ def main(args):
 
     vanilla = args.pe_type == "vanilla"
     global_it = 0
+    bfactor = args.bfactor
+    lamb = args.lamb
     for epoch in range(start_epoch, num_epochs):
         t2 = dt.now()
         gen_loss_accum = 0
@@ -943,7 +947,11 @@ def main(args):
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
         beta_control = args.beta_control
-        log('learning rate {} for epoch {}'.format(lr_scheduler.get_last_lr(), epoch))
+        #increasing bfactor slowly
+        args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.3*epoch)))*8./7.
+        beta_max    = 0.95 ** (epoch)
+        log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
+                        lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
 
         for minibatch in data_generator:
             ind = minibatch[-1].to(device)
@@ -957,7 +965,7 @@ def main(args):
             save_image = (batch_it % (args.log_interval*4)) == 0
 
             beta_control = args.beta_control*snr_ema
-            beta = beta_schedule(global_it)
+            beta = beta_schedule(global_it) * beta_max
 
             yr = torch.from_numpy(data.particles_real[ind.numpy()]).to(device) if args.use_real else None
             if do_pose_sgd:
@@ -977,7 +985,7 @@ def main(args):
                                               save_image=save_image, group_stat=group_stat,
                                               it=batch_it, enc=None,
                                               args=args, euler=euler,
-                                              posetracker=posetracker, data=data, update_params=True)#((epoch - start_epoch)%2 != 1))
+                                              posetracker=posetracker, data=data, update_params=True, snr2=snr_ema)
             update_it += 1
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
