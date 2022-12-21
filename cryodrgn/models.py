@@ -206,7 +206,8 @@ class HetOnlyVAE(nn.Module):
     def vanilla_encode(self, img, rots=None, trans=None, eulers=None, num_gpus=4):
         if self.encode_mode == 'fixed':
             z = self.encoder()
-            encout = {'encoding': None}
+            z = z.repeat(num_gpus, 1)
+            encout = {'encoding': None, 'z_mu': z}
         elif self.encode_mode == 'fixed_blur':
             #split encodings to template and blur kernel
             zs = self.encoder()
@@ -289,33 +290,6 @@ class HetOnlyVAE(nn.Module):
         decout["y_recon"] = fft.torch_ifft2_center(y_recon_fft)
         #decout["y_recon_ori"] = y_recon_ori
         #decout["y_ref"] = y_ref
-
-        if self.encode_mode in ["fixed"]:
-            #decout["probs"] = torch.ones(z.shape[0], 1, 1).to(z.get_device())
-            B = z.shape[0]
-            latent_dist = -(z.unsqueeze(1) - z.unsqueeze(0)).pow(2).sum(-1)*0.5
-            #remove diagonal
-            diag_mask = ~torch.eye(B, dtype=bool).to(z.get_device())
-            latent_dist = latent_dist.masked_select(diag_mask).view(B, B-1)
-            #get probs
-            latent_log_probs = F.log_softmax(latent_dist, dim=-1)
-            #stack and pass to encoder
-            B, C, H, W = y_recon.shape #(B is batch, C represent different views)
-            #compute transition probabilities
-            dist = -y_ref.pow(2)*0.5 + y_recon.detach()*y_ref - y_recon.detach().pow(2)*0.5
-            dist = dist.sum(dim=(-1, -2))*32/128**2
-            #remove diagonal
-            #dist_diag = torch.diagonal(dist)
-            dist = dist.masked_select(diag_mask).view(B, B-1)
-            probs = F.softmax(dist, dim=-1)
-            #print(probs)
-            decout["losses"]["pairkld"] = -probs*latent_log_probs
-            #keep diagonal
-            decout["y_recon_fft"] = torch.view_as_real(torch.diagonal(y_recon_fft).permute(dims=[2,0,1]).unsqueeze(1))
-            decout["y_ref_fft"]   = torch.view_as_real(torch.diagonal(y_ref_fft).permute(dims=[2,0,1]).unsqueeze(1))
-
-            decout["y_recon"] = torch.diagonal(y_recon).permute(dims=[2,0,1]).unsqueeze(1)
-            decout["y_ref"]   = torch.diagonal(y_ref).permute(dims=[2,0,1]).unsqueeze(1)
 
         return decout
 
@@ -457,7 +431,7 @@ class ConvTemplate(nn.Module):
         self.conv_out = nn.ConvTranspose3d(inchannels, 1, 4, 2, 1)
         #self.conv_out = nn.Conv3d(inchannels, 1, 3, 1, 1)
 
-        utils.initmod(self.conv_out, gain=1./np.sqrt(templateres//2))
+        utils.initmod(self.conv_out, gain=1./np.sqrt(templateres))
 
         self.intermediate_size = int(32*self.templateres/256)
         log('convtemplate: the output volume is of size {}, intermediate activations will be resampled from 32 to {}'.format(self.templateres, self.intermediate_size))
@@ -1272,7 +1246,7 @@ class VanillaDecoder(nn.Module):
                         euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
 
                         euler01 = euler_i[..., :2]
-                        neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=64, depth=0)
+                        neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=32, depth=0) #hp_order=64, depth=0)
 
                         len_euler = neighbor_eulers.shape[0]
                         n_eulers = torch.cat([neighbor_eulers, rand_ang.repeat(len_euler, 1)], dim=-1)
@@ -1421,7 +1395,7 @@ class VanillaDecoder(nn.Module):
                     ref = ref.squeeze(0)
                     refs.append(ref)
 
-            elif self.warp_type == "affine" or self.warp_type is None:
+            elif self.warp_type == "affine":
                 if self.use_fourier:
                     image, ref = self.fourier_transformer.hp_sample_(template_FT,
                                                                euler[i:i+1,...], ref_fft[i:i+1,...], ctf[i:i+1,...],
@@ -1430,7 +1404,45 @@ class VanillaDecoder(nn.Module):
                     ref = ref.squeeze(0) #(1, B, H, W)
                     refs.append(ref)
             else:
-                raise RuntimeError
+                if refine_pose:
+                    euler_i = euler[i:i+1,...] #(B, 3)
+
+                    rand_ang = (torch.rand(1, 1).to(euler.get_device()) - .5)*360
+
+                    euler2_sample_i = -euler_i[:, 2] #(1,) hopf angle == minus of euler angle
+                    euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
+
+                    euler01 = euler_i[..., :2]
+                    neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=32, depth=0) #hp_order=64, depth=0)
+
+                    len_euler = neighbor_eulers.shape[0]
+                    n_eulers = torch.cat([neighbor_eulers, rand_ang.repeat(len_euler, 1)], dim=-1)
+                    rot = lie_tools.hopf_to_SO3(n_eulers).unsqueeze(1).unsqueeze(1)
+
+                    i_euler = torch.cat([euler_i[..., :2], rand_ang], dim=-1)
+                    rot_i = lie_tools.hopf_to_SO3(i_euler).unsqueeze(1).unsqueeze(1)
+
+                    ref_i = ref_fft[i:i+1,...].repeat(euler2.shape[0], 1, 1, 1)
+                    # convert neighbor_eulers to a list
+                    euler_sample_i = neighbor_eulers#.repeat(2, 1)
+                    euler2_sample_i = euler2_sample_i.unsqueeze(0).repeat(len_euler, 1).view(len_euler, -1)
+                    euler_sample_i = torch.cat([euler_sample_i, -euler2_sample_i], dim=1)
+                    pos = self.transformer.rotate(rot_i)
+                    valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS)
+                    template_i = template.repeat(rot.shape[0], 1, 1, 1, 1)
+                    if affine is not None:
+                        pos = affine_grid @ rot
+                    else:
+                        pos = self.transformer.rotate(rot)
+                    vol = F.grid_sample(template_i, pos, align_corners=ALIGN_CORNERS)
+                    image = torch.sum(vol, axis=-3).squeeze(1)
+                    # rotate reference
+                    ref = self.transformer.rotate_2d(ref_i, -euler2).squeeze(1)
+                    refs.append(ref)
+                    mask_i = (torch.sum(valid, axis=-3) > 0).detach().squeeze(1)
+                    masks.append(mask_i)
+                else:
+                    raise RuntimeError
             images.append(image)
         images = torch.stack(images, 0)
         refs   = torch.stack(refs, 0)

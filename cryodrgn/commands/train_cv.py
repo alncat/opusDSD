@@ -44,11 +44,11 @@ def add_args(parser):
     parser.add_argument('--poses', type=os.path.abspath, required=True, help='Image poses (.pkl)')
     parser.add_argument('--ctf', metavar='pkl', type=os.path.abspath, help='CTF parameters (.pkl)')
     parser.add_argument('--group', metavar='pkl', type=os.path.abspath, help='group assignments (.pkl)')
-    parser.add_argument('--latents', type=os.path.abspath, help='Image poses (.pkl)')
     parser.add_argument('--group-stat', metavar='pkl', type=os.path.abspath, help='group statistics (.pkl)')
     parser.add_argument('--load', metavar='WEIGHTS.PKL', help='Initialize training from a checkpoint')
+    parser.add_argument('--latents', type=os.path.abspath, help='Image latent encodings (.pkl)')
     parser.add_argument('--split', metavar='pkl', help='Initialize training from a split checkpoint')
-    parser.add_argument('--valfrac', type=float, default=0.1, help='the fraction of images held for validation')
+    parser.add_argument('--valfrac', type=float, default=0.2, help='the fraction of images held for validation')
     parser.add_argument('--checkpoint', type=int, default=1, help='Checkpointing interval in N_EPOCHS (default: %(default)s)')
     parser.add_argument('--log-interval', type=int, default=1000, help='Logging interval in N_IMGS (default: %(default)s)')
     parser.add_argument('-v','--verbose',action='store_true',help='Increaes verbosity')
@@ -72,20 +72,20 @@ def add_args(parser):
 
     group = parser.add_argument_group('Training parameters')
     group.add_argument('-n', '--num-epochs', type=int, default=20, help='Number of training epochs (default: %(default)s)')
-    group.add_argument('-b','--batch-size', type=int, default=8, help='Minibatch size (default: %(default)s)')
+    group.add_argument('-b','--batch-size', type=int, default=20, help='Minibatch size (default: %(default)s)')
     group.add_argument('--wd', type=float, default=0, help='Weight decay in Adam optimizer (default: %(default)s)')
-    group.add_argument('--lr', type=float, default=1e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
-    group.add_argument('--lamb', type=float, default=0.8, help='restraint strength for umap prior (default: %(default)s)')
+    group.add_argument('--lr', type=float, default=1.5e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
+    group.add_argument('--lamb', type=float, default=1.0, help='restraint strength for umap prior (default: %(default)s)')
     group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
-    group.add_argument('--bfactor', type=float, default=3., help='apply bfactor (default: %(default)s) to reconstruction')
+    group.add_argument('--bfactor', type=float, default=6., help='apply bfactor (default: %(default)s) to reconstruction')
     group.add_argument('--beta', default='cos', help='Choice of beta schedule')
-    group.add_argument('--beta-control', default=0.5, type=float, help='restraint strength for KL target. (default: %(default)s)')
+    group.add_argument('--beta-control', default=1., type=float, help='restraint strength for KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
     group.add_argument('--tmp-prefix', type=str, default='tmp', help='prefix for naming intermediate reconstructions')
     group.add_argument('--amp', action='store_true', help='Use mixed-precision training')
     group.add_argument('--multigpu', action='store_true', help='Parallelize training across all detected GPUs')
-    group.add_argument('--num-gpus', type=int, default=1, help='number of gpus used for training')
+    group.add_argument('--num-gpus', type=int, default=4, help='number of gpus used for training')
 
     group = parser.add_argument_group('Pose SGD')
     group.add_argument('--do-pose-sgd', action='store_true', help='Refine poses with gradient descent')
@@ -262,7 +262,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         z_mu, z_logvar = _unparallelize(model).encode(*input_)
         z = _unparallelize(model).reparameterize(z_mu, z_logvar)
     else:
-        z_mu, z_logvar, z = 0., 0., 0.
+        z_mu, z_logstd, z = 0., 0., 0.
 
     plot = args.plot and it % (args.log_interval*8) == B
     if plot:
@@ -308,14 +308,17 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         z, encout = model.vanilla_encode(diff, rot, trans, eulers=euler, num_gpus=args.num_gpus)
         #print(z - encout['z_mu'])
         # sample nearest neighbors
-        posetracker.set_emb(encout["z_mu"], ind)
-        mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
+        if args.encode_mode == "grad":
+            posetracker.set_emb(encout["z_mu"], ind)
+            mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
                                                 ind, ctf_params, ctf_grid, grid, args, W, out_size)
-        mus = mus.to(z.get_device())
-        neg_mus = neg_mus.to(z.get_device())
-        others = None
+            mus = mus.to(z.get_device())
+            neg_mus = neg_mus.to(z.get_device())
+            others = None
         #neg_idices = None
         # mix knns
+        else:
+            mus = neg_mus = others = None
         # decode latents
         decout = model.vanilla_decode(rot, trans, z=z, save_mrc=save_image, eulers=euler,
                                       ref_fft=y, ctf=c, encout=encout, others=others, mask=mask_real)
@@ -333,15 +336,17 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             z_mu = encout["z_mu"]
             z_logstd = encout["z_logstd"]
             #z = encout["encoding"]
+
         y_recon_ori = decout["y_recon_ori"]
         # retrieve mask
         mask = decout["mask"]
         mask_sum = decout["mask"].sum(dim=(-1,-2))
         # retrieve nearest neighbor in the same batch
-        z_nn = encout["z_knn"]
-        diff = (z_mu.unsqueeze(1) - z_nn).pow(2).sum(-1)
-        #print(diff)
-        losses["knn"] = torch.log(1 + diff).mean()
+        if args.encode_mode == "grad":
+            z_nn = encout["z_knn"]
+            diff = (z_mu.unsqueeze(1) - z_nn).pow(2).sum(-1)
+            #print(diff)
+            losses["knn"] = torch.log(1 + diff).mean()
         #print(y_recon_ori[:, :1, ...].shape)
 
     if use_ctf:
@@ -356,10 +361,12 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             if plot:
                 #correlations = F.cosine_similarity(y_recon_ori[:,d_k,...].view(B,-1), y_ref[:,d_k,...].view(B,-1))
                 utils.plot_image(axes, y_recon_ori[0,0,...].detach().cpu().numpy(), 0, 0, log=True)
-                #utils.plot_image(axes, y_recon_ori[d_i,d_k,...].detach().cpu().numpy(), d_j, 0, log=True)
                 #print(encout["rotated_x"].shape)
                 #utils.plot_image(axes, encout["rotated_x"][0,...].detach().cpu().numpy(), 0, 0, log=True)
-                utils.plot_image(axes, encout["rotated_x"][d_i,...].detach().cpu().numpy(), d_j, 0, log=True)
+                if "rotated_x" in encout:
+                    utils.plot_image(axes, encout["rotated_x"][d_i,...].detach().cpu().numpy(), d_j, 0, log=True)
+                else:
+                    utils.plot_image(axes, y_recon_ori[d_i,d_k,...].detach().cpu().numpy(), d_j, 0, log=True)
                 utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
                 #utils.plot_image(axes, y[d_i,...].detach().numpy(), 1)
                 #log("correlations w.o. mask: {}".format(correlations.detach().cpu().numpy()))
@@ -413,11 +420,11 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
             #print(y_recon.shape, y.shape, l2_diff.shape, mask_sum.shape)
             probs = F.softmax(-l2_diff.detach()*0.5, dim=-1).detach()
             #get argmax
-            inds = torch.argmax(probs, dim=-1, keepdim=True)
-            inds = inds.unsqueeze(-1).repeat(1, 1, 3)
-            #get euler
-            #print(inds, euler_samples)
-            top_euler = torch.gather(euler_samples, 1, inds).squeeze(1).cpu()
+            #inds = torch.argmax(probs, dim=-1, keepdim=True)
+            #inds = inds.unsqueeze(-1).repeat(1, 1, 3)
+            ##get euler
+            ##print(inds, euler_samples)
+            #top_euler = torch.gather(euler_samples, 1, inds).squeeze(1).cpu()
 
             #get k argmax
             #inds_ret = torch.topk(probs, 16, dim=-1)
@@ -454,7 +461,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         kld = losses['kldiv'].mean() if 'kldiv' in losses else torch.tensor(0.)
 
     # total loss
-    mu2, std2 = torch.tensor(0.), torch.tensor(0.)
+    mu2, std2, cross_corr, c_mmd  = torch.tensor(0.), torch.tensor(0.), torch.tensor(0.), torch.tensor(0.)
 
     if "mu2" in losses:
         mu2 = losses["mu2"]
@@ -470,9 +477,10 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     #print(losses["kldiv"].shape, losses["tvl2"].shape)
     # set a unified mask_sum
     mask_sum = mask_sum.max()
-    #mask_sum = (70*2)**2
     if not vanilla:
         loss = gen_loss + beta_control*(beta-kld)**2/mask.sum().float()
+    elif args.encode_mode == "fixed":
+        loss = gen_loss + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
     else:
         #loss = gen_loss + 1e-4*beta_control*beta*kld/mask_sum.float() + beta_control*beta*1e-5*torch.mean(losses['tvl2'] + 1e-1*losses['l2'])
         #alpha = 0.005*beta #0.01*beta
@@ -510,7 +518,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
         mmd = mmd.mean()
         #print("c_mmd: ", c_mmd, "mmd: ", mmd)
-        loss += lamb*(c_mmd + mmd + 0.5*cross_corr)*((beta+0.05)/1.05)/mask_sum
+        loss += lamb*(c_mmd + mmd + 0.25*cross_corr)*((beta+0.05)/1.05)/mask_sum
         if "knn" in losses:
             loss += lamb*losses["knn"]*((beta+0.05)/1.05)/mask_sum
         #loss = loss/(1 + lamb*beta)
@@ -733,7 +741,7 @@ def main(args):
     # load poses
     #if args.do_pose_sgd: assert args.domain == 'hartley', "Need to use --domain hartley if doing pose SGD"
     do_pose_sgd = args.do_pose_sgd
-    do_deform   = args.warp_type == 'deform' or args.encode_mode == 'grad'
+    do_deform   = args.warp_type == 'deform' or args.encode_mode in ['grad', 'fixed']
     # use D-1 instead of D
     posetracker = PoseTracker.load(args.poses, Nimg, D-1, 's2s2' if do_pose_sgd else None, ind,
                                    deform=do_deform, deform_emb_size=args.zdim, latents=args.latents, batch_size=args.batch_size)
@@ -811,11 +819,6 @@ def main(args):
     pose_encoder = None
     optim = torch.optim.AdamW(model_parameters, lr=args.lr, weight_decay=args.wd)
 
-    optimD = None
-    #if args.encode_mode == "grad":
-    #    discriminator_parameters = list(model.shape_encoder.parameters())
-    #    optimD = torch.optim.AdamW(discriminator_parameters, lr=args.lr, weight_decay=args.wd)
-
     # learning rate scheduler
     #warm_up_epochs = 2
     #max_num_epochs = 12
@@ -823,7 +826,7 @@ def main(args):
     #                                 0.5 * (math.cos((epoch - warm_up_epochs)/(max_num_epochs - warm_up_epochs) * \
     #                                                 math.pi) + 1.)
     #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lr_lambda=warm_up_with_cosine_lr)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, 1, gamma=0.97)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, 1, gamma=0.96)
 
     # Mixed precision training with AMP
     if args.amp:
@@ -948,8 +951,8 @@ def main(args):
         update_it = 0
         beta_control = args.beta_control
         #increasing bfactor slowly
-        args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.3*epoch)))*8./7.
-        beta_max    = 0.95 ** (epoch)
+        args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
+        beta_max    = 0.96 ** (epoch)
         log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
                         lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
 
