@@ -3,6 +3,7 @@
 2. [Opus-DSD](#opusdsd)
     1. [80S ribosome](#80s)
     2. [Hrd1/Hrd3 complex](#hrd)
+    3. [RAG](#rag)
 3. [setup environment](#setup)
 4. [prepare data](#preparation)
 5. [training](#training)
@@ -74,14 +75,20 @@ Tile of some states:
 
 We should not regard all missing densities at a certain contour level as compositional difference in those states unless the occupancy difference is of large scale or consistent across different contour levels, like state 4 can be safely regarded as a different class since the whole left upper corner is gone! The weak densities might also be caused by poor pose alignments due to the high flexibility in that region. Hence, those regions can only resolve to poor resolutions even using our disentanglement program. If you believe your dataset is very homogenous, then you should focus on verifying whether the learning result reflects certain consistent dynamics. The final note is that, deep learning is great, but always be critical about its result when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
 
-
-The corresponding UMAP shows the locations of states:
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umaph15.png?raw=true "hrd umap 15")
-
 Superposition of state 8 with state 3:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrds.png?raw=true "hrd 15 superposition")
 
 The superposition clearly demonstrated the relative displacements of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolution like 4.7 angstrom (consensus model) and the upper middle part shows blurred weak densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
+
+## RAG complex <a name="rag"></a>
+
+Another exmaple UMAP of latent space for RAG complex [EMPIAR-10049](https://www.ebi.ac.uk/empiar/EMPIAR-10049/):
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag_umap.png?raw=true "RAG1-RAG2 UMAP")
+
+Superposition of state 0 with state 7:
+
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag.png?raw=true "rag 07")
+
 
 # set up environment <a name="setup"></a>
 
