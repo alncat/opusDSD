@@ -85,9 +85,11 @@ The superposition clearly demonstrated the relative displacements of the two Hrd
 Another exmaple UMAP of latent space for RAG complex [EMPIAR-10049](https://www.ebi.ac.uk/empiar/EMPIAR-10049/):
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag_umap.png?raw=true "RAG1-RAG2 UMAP")
 
-Superposition of state 0 with state 7:
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag_umapk.png?raw=true "RAG1-RAG2 UMAP clusters")
 
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag.png?raw=true "rag 07")
+Superposition of state 0 with state 5:
+
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag.png?raw=true "rag 05")
 
 
 # set up environment <a name="setup"></a>
