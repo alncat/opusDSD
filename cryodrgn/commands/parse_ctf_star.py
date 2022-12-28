@@ -109,10 +109,10 @@ def main(args):
                     #    print(particle_groups[i], group_count, avg_def, i_le, all_defocus[i_le], all_defocus[i_le-1])
                     #print(particle_groups_from_defocus[i], particle_groups[i], particle_groups_from_defocus[i] - particle_groups[i])
                 # when mapping doesn't match, then they do not match
-                if mapping[particle_groups[i]] != particle_groups_from_defocus[i]:
-                    print("duplicate: ", particle_groups_from_defocus[i], particle_groups[i], particle_groups_from_defocus[i] - particle_groups[i])
-    print(set(particle_groups))
-    print(mapping)
+                #if mapping[particle_groups[i]] != particle_groups_from_defocus[i]:
+                #    print("duplicate: ", particle_groups_from_defocus[i], particle_groups[i], particle_groups_from_defocus[i] - particle_groups[i])
+    #print(set(particle_groups))
+    #print(mapping)
 
     log('CTF parameters for first particle:')
     ctf.print_ctf_params(ctf_params[0])

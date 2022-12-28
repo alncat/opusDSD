@@ -1246,7 +1246,7 @@ class VanillaDecoder(nn.Module):
                         euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
 
                         euler01 = euler_i[..., :2]
-                        neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=32, depth=0) #hp_order=64, depth=0)
+                        neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=64, depth=0) #hp_order=64, depth=0)
 
                         len_euler = neighbor_eulers.shape[0]
                         n_eulers = torch.cat([neighbor_eulers, rand_ang.repeat(len_euler, 1)], dim=-1)
@@ -1413,7 +1413,7 @@ class VanillaDecoder(nn.Module):
                     euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
 
                     euler01 = euler_i[..., :2]
-                    neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=32, depth=0) #hp_order=64, depth=0)
+                    neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=64, depth=0) #hp_order=64, depth=0)
 
                     len_euler = neighbor_eulers.shape[0]
                     n_eulers = torch.cat([neighbor_eulers, rand_ang.repeat(len_euler, 1)], dim=-1)

@@ -950,9 +950,9 @@ def main(args):
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
         beta_control = args.beta_control
-        #increasing bfactor slowly
-        args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
-        beta_max    = 0.96 ** (epoch)
+        #decreasing bfactor slowly
+        args.bfactor = bfactor*(1. - 0.3/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
+        beta_max    = 0.98 ** (epoch)
         log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
                         lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
 
