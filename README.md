@@ -59,7 +59,9 @@ Comparison between some states:
 Note that UMAP1 actually correlates with this movement!
 
 The movie along PC1
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/mov4.mp4?raw=true "80S ribosome PC1")
+
+https://user-images.githubusercontent.com/3967300/221396418-ab0aa0ff-4bc9-400d-8042-c17deea2b807.mp4
+
 
 A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like **fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)**
 
