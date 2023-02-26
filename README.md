@@ -2,8 +2,7 @@
 1. [UMAP example](#umap)
 2. [Opus-DSD](#opusdsd)
     1. [80S ribosome](#80s)
-    2. [Hrd1/Hrd3 complex](#hrd)
-    3. [RAG](#rag)
+    2. [Spliceosome](#splice)
 3. [setup environment](#setup)
 4. [prepare data](#preparation)
 5. [training](#training)
@@ -54,10 +53,6 @@ Comparison between some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborna.png?raw=true "80S ribosome rna swing")
 
 
-40S subunit rotation
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborotation.png?raw=true "80S ribosome rotation")
-Note that UMAP1 actually correlates with this movement!
-
 The movie along PC1
 
 https://user-images.githubusercontent.com/3967300/221396418-ab0aa0ff-4bc9-400d-8042-c17deea2b807.mp4
@@ -67,35 +62,13 @@ A more colorful one, the particles are colored according to their projection cla
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
-## Hrd1/Hrd3 complex <a name="hrd"></a>
-The weight file can be downloaded from https://www.icloud.com/iclouddrive/040I4UJjIpsWaCD2by_Df7PRQ#weights.
-The other pkls for running visualzing are deposited at https://drive.google.com/drive/folders/1WdBwl_oSiy7fYPa0_HHUMVGLL0JZxVRz?usp=share_link.
-These files are from the epoch 15. ```z.15.pkl``` stores the latent encodings for all particles. ```hrd_pose_euler.pkl``` is the pose paramter file. Our program will read configurations from ```config.pkl```. Put them in the same folder, you can then follow the [analyze result](#analysis) section to visualize the latent space.
+## Spliceosome complex <a name="splice"></a>
+UMAP and some selected classes for the spliceosome complex
+<img width="1160" alt="image" src="https://user-images.githubusercontent.com/3967300/221396692-fd464206-ce05-47fc-a402-91ce122d34c8.png">
 
-Another exmaple UMAP of latent space for Hrd1/Hrd3 complex [EMPIAR-10099](https://www.ebi.ac.uk/empiar/EMPIAR-10099/):
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapht.png?raw=true "Hrd1/Hrd3 UMAP")
+The movie of the movement in spliceosome along PC1
 
-Tile of some states:
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrd.png?raw=true "hrd 15")
-
-We should not regard all missing densities at a certain contour level as compositional difference in those states unless the occupancy difference is of large scale or consistent across different contour levels, like state 4 can be safely regarded as a different class since the whole left upper corner is gone! The weak densities might also be caused by poor pose alignments due to the high flexibility in that region. Hence, those regions can only resolve to poor resolutions even using our disentanglement program. If you believe your dataset is very homogenous, then you should focus on verifying whether the learning result reflects certain consistent dynamics. The final note is that, deep learning is great, but always be critical about its result when applying it to highly noisy dataset such as cryo-EM images since it is not foolproof!
-
-Superposition of state 8 with state 3:
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrds.png?raw=true "hrd 15 superposition")
-
-The superposition clearly demonstrated the relative displacements of the two Hrd3 subunits. We can then understand how this complex can only be determined to low resolution like 4.7 angstrom (consensus model) and the upper middle part shows blurred weak densities. This example demonstrates that DSD can resolve compositional changes and dynamics in a unified framework.
-
-## RAG complex <a name="rag"></a>
-
-Another exmaple UMAP of latent space for RAG complex [EMPIAR-10049](https://www.ebi.ac.uk/empiar/EMPIAR-10049/):
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag_umap.png?raw=true "RAG1-RAG2 UMAP")
-
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag_umapk.png?raw=true "RAG1-RAG2 UMAP clusters")
-
-Superposition of state 0 with state 5:
-
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/rag.png?raw=true "rag 05")
-
+https://user-images.githubusercontent.com/3967300/221396607-9e4d9882-86f8-4f54-8122-3ee7fe48c956.mp4
 
 # set up environment <a name="setup"></a>
 
