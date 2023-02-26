@@ -10,7 +10,8 @@
 
 # Movie of the PC1 of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
 The movie of 80 ribosome along PC1
-https://user-images.githubusercontent.com/3967300/221396418-ab0aa0ff-4bc9-400d-8042-c17deea2b807.mp4
+
+https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-aabb-5d38a58cb7dd.mp4
 
 
 # Opus-DSD <div id="opusdsd">
