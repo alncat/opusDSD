@@ -11,7 +11,7 @@
 # Movie of the PC1 of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
 The movie of 80 ribosome along PC1
 https://user-images.githubusercontent.com/3967300/221396418-ab0aa0ff-4bc9-400d-8042-c17deea2b807.mp4
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
+
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
