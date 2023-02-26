@@ -1,5 +1,5 @@
 # Table of contents
-1. [UMAP example](#umap)
+1. [Movie example](#umap)
 2. [Opus-DSD](#opusdsd)
     1. [80S ribosome](#80s)
     2. [Spliceosome](#splice)
@@ -8,12 +8,10 @@
 5. [training](#training)
 6. [analyze result](#analysis)
 
-We now released weights and latents for some examples [80S ribosome](#80s), [Hrd1/Hrd3](#hrd)! You can use them to visualize the latent spaces for those examples.
-
-# UMAP of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
+# Movie of the PC1 of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
+The movie of 80 ribosome along PC1
+https://user-images.githubusercontent.com/3967300/221396418-ab0aa0ff-4bc9-400d-8042-c17deea2b807.mp4
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
-
-Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset. The pose assignment error refers to the difference between the pose parameter of the particle obtained by aligning with its ground-truth conformation and its pose parameter obtained by aligning with the consensus model. **If all particles can be aligned with its ground-truth conformation, the distribution of pose parameters for every conformation should be even and uniform (ideally). However, when all particles are aligned against a single model, the distribution of pose parameters for every conformation will be distorted accordingly!**
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
@@ -53,14 +51,11 @@ Comparison between some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborna.png?raw=true "80S ribosome rna swing")
 
 
-The movie along PC1
-
-https://user-images.githubusercontent.com/3967300/221396418-ab0aa0ff-4bc9-400d-8042-c17deea2b807.mp4
-
-
 A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like **fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)**
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
+
+Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset. The pose assignment error refers to the difference between the pose parameter of the particle obtained by aligning with its ground-truth conformation and its pose parameter obtained by aligning with the consensus model. **If all particles can be aligned with its ground-truth conformation, the distribution of pose parameters for every conformation should be even and uniform (ideally). However, when all particles are aligned against a single model, the distribution of pose parameters for every conformation will be distorted accordingly!**
 
 ## Spliceosome complex <a name="splice"></a>
 UMAP and some selected classes for the spliceosome complex
