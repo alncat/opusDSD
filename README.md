@@ -166,7 +166,7 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --split hrd-split.pkl --bfactor 6.
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --split hrd-split.pkl --bfactor 6.
 ```
 
 The meaning of each argument is explained as follows:
@@ -175,7 +175,6 @@ The meaning of each argument is explained as follows:
 | --ctf   | ctf parameters of the image stack |
 | --poses | pose parameters of the image stack |
 | -n     | the number of training epoches, each training epoch loops through all images in the training set |
-| --group | ctf groups of the image stack |
 | -b     | the number of images for each batch on each gpu, depends on the size of available gpu memory|
 | --zdim  | the dimension of latent encodings, increase the zdim will improve the fitting capacity of neural network, but may risk of overfitting |
 | --lr    | the initial learning rate for adam optimizer, 1.e-4 should work, but you may use larger lr for dataset with higher SNR |
@@ -208,7 +207,7 @@ Happy Training! Contact us if you run into any troubles, since we may miss certa
 To restart execution from a checkpoint, you can use
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --group ./hrd-grp.pkl --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
 ```
 | argument |  explanation |
 | --- | --- |
@@ -245,7 +244,7 @@ sh eval_vol.sh ./data/ribo/ 16 16 1.77
 
 - The first argument after eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
 - the second argument is the epoch number you just analyzed
-- the third argument is the number of kmeans clusters you used in analysis
+- the third argument is the number of kmeans clusters (or principal component) you used in analysis
 - the fourth argument is the apix of the generated volumes, you can specify a target value
 
 change to directory ```./data/ribo/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
