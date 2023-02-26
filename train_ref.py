@@ -7,7 +7,6 @@ import sys, os
 import argparse
 import pickle
 from datetime import datetime as dt
-import math
 
 import torch
 import torch.nn as nn
@@ -42,13 +41,14 @@ def add_args(parser):
     parser.add_argument('-r', '--ref_vol', type=os.path.abspath, help='Input volume (.mrcs)')
     parser.add_argument('--zdim', type=int, required=False, help='Dimension of latent variable')
     parser.add_argument('--poses', type=os.path.abspath, required=True, help='Image poses (.pkl)')
+    parser.add_argument('--decoder-poses', type=os.path.abspath, required=True, help='Image poses for decoder (.pkl)')
     parser.add_argument('--ctf', metavar='pkl', type=os.path.abspath, help='CTF parameters (.pkl)')
     parser.add_argument('--group', metavar='pkl', type=os.path.abspath, help='group assignments (.pkl)')
+    parser.add_argument('--latents', type=os.path.abspath, help='Image poses (.pkl)')
     parser.add_argument('--group-stat', metavar='pkl', type=os.path.abspath, help='group statistics (.pkl)')
     parser.add_argument('--load', metavar='WEIGHTS.PKL', help='Initialize training from a checkpoint')
-    parser.add_argument('--latents', type=os.path.abspath, help='Image latent encodings (.pkl)')
     parser.add_argument('--split', metavar='pkl', help='Initialize training from a split checkpoint')
-    parser.add_argument('--valfrac', type=float, default=0.2, help='the fraction of images held for validation')
+    parser.add_argument('--valfrac', type=float, default=0.1, help='the fraction of images held for validation')
     parser.add_argument('--checkpoint', type=int, default=1, help='Checkpointing interval in N_EPOCHS (default: %(default)s)')
     parser.add_argument('--log-interval', type=int, default=1000, help='Logging interval in N_IMGS (default: %(default)s)')
     parser.add_argument('-v','--verbose',action='store_true',help='Increaes verbosity')
@@ -72,20 +72,19 @@ def add_args(parser):
 
     group = parser.add_argument_group('Training parameters')
     group.add_argument('-n', '--num-epochs', type=int, default=20, help='Number of training epochs (default: %(default)s)')
-    group.add_argument('-b','--batch-size', type=int, default=20, help='Minibatch size (default: %(default)s)')
+    group.add_argument('-b','--batch-size', type=int, default=8, help='Minibatch size (default: %(default)s)')
     group.add_argument('--wd', type=float, default=0, help='Weight decay in Adam optimizer (default: %(default)s)')
-    group.add_argument('--lr', type=float, default=1.5e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
-    group.add_argument('--lamb', type=float, default=1.0, help='restraint strength for umap prior (default: %(default)s)')
+    group.add_argument('--lr', type=float, default=1e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
+    group.add_argument('--lamb', type=float, default=1, help='penalty for umap prior (default: %(default)s)')
     group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
-    group.add_argument('--bfactor', type=float, default=6., help='apply bfactor (default: %(default)s) to reconstruction')
-    group.add_argument('--beta', default='cos', help='Choice of beta schedule')
-    group.add_argument('--beta-control', default=1., type=float, help='restraint strength for KL target. (default: %(default)s)')
+    group.add_argument('--bfactor', type=float, default=3., help='apply bfactor (default: %(default)s) to reconstruction')
+    group.add_argument('--beta', default=None, help='Choice of beta schedule or a constant for KLD weight (default: 1/zdim)')
+    group.add_argument('--beta-control', type=float, help='KL-Controlled VAE gamma. Beta is KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
-    group.add_argument('--tmp-prefix', type=str, default='tmp', help='prefix for naming intermediate reconstructions')
     group.add_argument('--amp', action='store_true', help='Use mixed-precision training')
     group.add_argument('--multigpu', action='store_true', help='Parallelize training across all detected GPUs')
-    group.add_argument('--num-gpus', type=int, default=4, help='number of gpus used for training')
+    group.add_argument('--num-gpus', type=int, default=1, help='number of gpus used for training')
 
     group = parser.add_argument_group('Pose SGD')
     group.add_argument('--do-pose-sgd', action='store_true', help='Refine poses with gradient descent')
@@ -99,7 +98,7 @@ def add_args(parser):
     group = parser.add_argument_group('Encoder Network')
     group.add_argument('--enc-layers', dest='qlayers', type=int, default=3, help='Number of hidden layers (default: %(default)s)')
     group.add_argument('--enc-dim', dest='qdim', type=int, default=256, help='Number of nodes in hidden layers (default: %(default)s)')
-    group.add_argument('--encode-mode', default='grad', choices=('conv','resid','mlp','tilt',
+    group.add_argument('--encode-mode', default='resid', choices=('conv','resid','mlp','tilt',
                                                                   'fixed', 'affine', 'fixed_blur', 'deform', 'grad',
                                                                   'vq'),
                                             help='Type of encoder network (default: %(default)s)')
@@ -125,7 +124,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                 beta_control=None, tilt=None, ind=None, grid=None, ctf_grid=None,
                 ctf_params=None, yr=None, use_amp=False, save_image=False, vanilla=True,
                 group_stat=None, do_scale=False, it=None, enc=None,
-                args=None, euler=None, posetracker=None, data=None, update_params=True, snr2=None):
+                args=None, euler=None, posetracker=None, data=None, update_params=True, decoder_euler=None):
 
     if update_params:
         model.train()
@@ -133,6 +132,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
         model.eval()
     if trans is not None:
         y, yt = preprocess_input(y, yt, lattice, trans, vanilla=vanilla)
+    mask = 70
     z_mu, z_logstd, z, y_recon, y_recon_tilt, losses, y, y_ffts, mus, euler_samples, y_recon_ori, neg_mus, mask_sum = run_batch(
                                                                  model, lattice, y, yt, rot,
                                                                  tilt=tilt, ind=ind, ctf_params=ctf_params,
@@ -140,20 +140,20 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                                                                  grid=grid, save_image=save_image,
                                                                  group_stat=group_stat, do_scale=do_scale,
                                                                  trans=trans, it=it, enc=enc,
-                                                                 args=args,
-                                                                 euler=euler,
-                                                                 posetracker=posetracker, data=data)
+                                                                 args=args, mask=mask,
+                                                                 euler=euler, posetracker=posetracker, data=data,
+                                                                 decoder_euler=decoder_euler)
     if update_params:
         optim.zero_grad()
 
-    loss, gen_loss, snr, mu2, std2, mmd, c_mmd, top_euler, mse = loss_function(z_mu, z_logstd, y, yt, y_recon,
+    loss, gen_loss, kld, mu2, std2, mmd, c_mmd, top_euler = loss_function(z_mu, z_logstd, y, yt, y_recon, mask,
                                         beta, y_recon_tilt, beta_control, vanilla=vanilla,
                                         group_stat=group_stat, ind=ind, mask_sum=mask_sum,
                                         losses=losses, args=args, it=it, y_ffts=y_ffts, zs=z,
-                                        mus=mus, neg_mus=neg_mus, y_recon_ori=y_recon_ori, euler_samples=euler_samples, snr2=snr2)
+                                        mus=mus, neg_mus=neg_mus, y_recon_ori=y_recon_ori, euler_samples=euler_samples)
 
-    if top_euler is not None and not update_params:
-        posetracker.set_euler(top_euler, ind)
+    if top_euler is not None: #and not update_params:
+        posetracker.set_decoder_euler(top_euler, ind)
 
     if use_amp:
         with amp.scale_loss(loss, optim) as scaled_loss:
@@ -162,55 +162,40 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
         loss.backward()
     if update_params:
         optim.step()
-    return z_mu, loss.item(), gen_loss.item(), snr.item(), losses['l2'].mean().item(), losses['tvl2'].mean().item(), \
-            mu2.item()/args.zdim, std2.item()/args.zdim, mmd.item(), c_mmd.item(), mse.item()
+    return z_mu, loss.item(), gen_loss.item(), kld.item()/args.zdim, losses['l2'].mean().item(), losses['tvl2'].mean().item(), \
+            mu2.item()/args.zdim, std2.item()/args.zdim, mmd.item(), c_mmd.item()
 
-def data_augmentation(y, trans, ctf_grid, grid, window_r, downfrac=0.5):
+def data_augmentation(y, trans, ctf_grid, mask, grid, window_r, downfrac=0.5):
     with torch.no_grad():
         y_fft = fft.torch_fft2_center(y)
         # undo experimental image translation
         #print(trans)
-        #trans = torch.clamp(trans, min=-10, max=10)
+        #trans = torch.clamp(trans, min=-8, max=8)
         #print(trans)
         y_fft = ctf_grid.translate_ft(y_fft, -trans)
 
-        #window y
-        y = fft.torch_ifft2_center(y_fft)
-        mask_real = grid.get_circular_mask(window_r)
-        y *= mask_real
-        y_fft = fft.torch_fft2_center(y)
-
         # apply b factor
-        random_b = np.random.rand() - 0.5
-        b_fact = ctf_grid.get_b_factor(b=random_b*2)
-        y_fft_ori = y_fft*b_fact
-
-        random_b = np.random.rand() - 0.5
-        b_fact = ctf_grid.get_b_factor(b=random_b*2)
+        b_fact = ctf_grid.get_b_factor(b=.25)
         y_fft *= b_fact
 
         #print(y.shape, y_fft.shape)
+        y = fft.torch_ifft2_center(y_fft)
         # window y
-        #y = fft.torch_ifft2_center(y_fft)
-        #mask_real = grid.get_circular_mask(window_r)
-        #y *= mask_real
+        mask_real = grid.get_circular_mask(window_r)
+        y *= mask_real
 
         # downsample in frequency space by applying cos filter
         #y_fft = utils.mask_image_fft(y, mask, ctf_grid)
+        y_fft = fft.torch_fft2_center(y)
 
         down_size = (int(y.shape[-1]*downfrac)//2)*2
         y_fft_s = torch.fft.fftshift(y_fft, dim=(-2))
         y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
         y_fft = torch.fft.ifftshift(y_fft_crop, dim=(-2))
         y = fft.torch_ifft2_center(y_fft)
-
-        y_fft_s = torch.fft.fftshift(y_fft_ori, dim=(-2))
-        y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
-        y_fft_ori = torch.fft.ifftshift(y_fft_crop, dim=(-2))
-
         #y_rand = ctf_grid.sample_local_translation(y_fft, 1, 1.)
         #y = fft.torch_ifft2_center(y_rand)
-        return y, y_fft_ori
+        return y, y_fft
 
 def preprocess_input(y, yt, lattice, trans, vanilla=True):
     # center the image
@@ -229,7 +214,7 @@ def _unparallelize(model):
         return model.module
     return model
 
-def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, grid, args, W, out_size):
+def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, mask, grid, args, W, out_size):
     device = euler.get_device()
     B = euler.shape[0]
     mus, idices, top_mus, neg_mus = posetracker.sample_neighbors(euler.cpu(), ind.cpu(), num_pose=8)
@@ -245,14 +230,14 @@ def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, g
 def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
               yr=None, vanilla=True, ctf_grid=None, grid=None, save_image=False,
               group_stat=None, do_scale=True, trans=None, it=None, enc=None,
-              args=None, euler=None, posetracker=None, data=None):
+              args=None, mask=None, euler=None, posetracker=None, data=None, decoder_euler=None):
     use_tilt = yt is not None
     use_ctf = ctf_params is not None
     B = y.size(0)
     D = lattice.D
     W = y.size(-1)
     out_size = D - 1
-    y, y_fft = data_augmentation(y, trans.unsqueeze(1), ctf_grid, grid, args.window_r, downfrac=args.downfrac)
+    y, y_fft = data_augmentation(y, trans.unsqueeze(1), ctf_grid, mask, grid, args.window_r, downfrac=args.downfrac)
     # get real mask
     mask_real = grid.get_circular_mask(args.window_r)
     mask_real = utils.crop_image(mask_real, out_size)
@@ -297,21 +282,15 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             with torch.no_grad():
                 # undo experimental image translation
                 #y_fft_mask = ctf_grid.translate_ft(y_fft, -trans)
-                if y_fft.shape[-2] != model.encoder_image_size:
-                    y_fft_s    = torch.fft.fftshift(y_fft, dim=(-2))
-                    #downsample image, previous default is 128
-                    y_fft_crop = utils.crop_fft(y_fft_s, model.encoder_image_size)*(model.encoder_image_size/y_fft.shape[-2])**2
-                    y_fft_crop = torch.fft.ifftshift(y_fft_crop, dim=(-2))
-                    #diff = y_fft_masked * c.unsqueeze(1)
-                    #diff /= (c.pow(2).unsqueeze(1) + 0.5)
-                    diff = fft.torch_ifft2_center(y_fft_crop)#*mask_real
-                else:
-                    diff = fft.torch_ifft2_center(y_fft)#*mask_real
-                assert diff.shape[-1] == model.encoder_image_size, "y shape {y.shape[-1]} should equal with {model.encoder_image_size}"
-
+                y_fft_s    = torch.fft.fftshift(y_fft, dim=(-2))
+                y_fft_crop = utils.crop_fft(y_fft_s, model.encoder_image_size)*(model.encoder_image_size/out_size)**2
+                y_fft_crop = torch.fft.ifftshift(y_fft_crop, dim=(-2))
+                #diff = y_fft_masked * c.unsqueeze(1)
+                #diff /= (c.pow(2).unsqueeze(1) + 0.5)
+                diff = fft.torch_ifft2_center(y_fft_crop)#*mask_real
             if plot and True:
                 #i_c = fft.torch_ifft2_center(y_fft_crop)
-                print(f"ctf {c.shape}, y_fft {y_fft.shape}")
+                print("ctf, y_fft", c.shape, y_fft_s.shape)
                 #utils.plot_image(axes, exp_fac.detach().cpu().numpy(), 0)
                 #utils.plot_image(axes, i_c[d_i,d_i,...].detach().cpu().numpy(), d_i, 0, log=True)
                 #utils.plot_image(axes, diff[d_i,d_i,...].detach().cpu().numpy(), d_i, 2, log=True)
@@ -330,14 +309,15 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         # sample nearest neighbors
         posetracker.set_emb(encout["z_mu"], ind)
         mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
-                                                ind, ctf_params, ctf_grid, grid, args, W, out_size)
+                                                ind, ctf_params, ctf_grid, mask, grid, args, W, out_size)
         mus = mus.to(z.get_device())
         neg_mus = neg_mus.to(z.get_device())
         others = None
         #neg_idices = None
         # mix knns
         # decode latents
-        decout = model.vanilla_decode(rot, trans, z=z, save_mrc=save_image, eulers=euler,
+        # using decoder eulers
+        decout = model.vanilla_decode(rot, trans, z=z, save_mrc=save_image, eulers=decoder_euler,
                                       ref_fft=y, ctf=c, encout=encout, others=others, mask=mask_real)
         #decout, encout = model(diff, rot, trans, z=enc, save_mrc=save_image, eulers=euler, ref_fft=y_fft, ctf=c, others=others)
         y_recon_fft = torch.view_as_complex(decout["y_recon_fft"])
@@ -375,12 +355,12 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             d_i, d_j, d_k = 1, 1, 0
             if plot:
                 #correlations = F.cosine_similarity(y_recon_ori[:,d_k,...].view(B,-1), y_ref[:,d_k,...].view(B,-1))
-                utils.plot_image(axes, y_recon_ori[0,0,...].detach().cpu().numpy(), 0, 0, log=True, log_msg="y_recon_ori")
+                utils.plot_image(axes, y_recon_ori[0,0,...].detach().cpu().numpy(), 0, 0, log=True)
                 #utils.plot_image(axes, y_recon_ori[d_i,d_k,...].detach().cpu().numpy(), d_j, 0, log=True)
                 #print(encout["rotated_x"].shape)
                 #utils.plot_image(axes, encout["rotated_x"][0,...].detach().cpu().numpy(), 0, 0, log=True)
-                utils.plot_image(axes, encout["rotated_x"][d_i,...].detach().cpu().numpy(), d_j, 0, log=True, log_msg="rotated_x")
-                utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2, log=True, log_msg="y_ref")
+                utils.plot_image(axes, encout["rotated_x"][d_i,...].detach().cpu().numpy(), d_j, 0, log=True)
+                utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
                 #utils.plot_image(axes, y[d_i,...].detach().numpy(), 1)
                 #log("correlations w.o. mask: {}".format(correlations.detach().cpu().numpy()))
 
@@ -395,7 +375,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
                         log("group_scales: {}".format(group_scales))
                     #y_recon_fft *= group_scales.unsqueeze(-1).unsqueeze(-1)
             if plot:
-                utils.plot_image(axes, y_recon[0,0,...].detach().cpu().numpy(), 0, 1, log_msg="y_recon")
+                utils.plot_image(axes, y_recon[0,0,...].detach().cpu().numpy(), 0, 1)
                 utils.plot_image(axes, y_recon[d_i,d_k,...].detach().cpu().numpy(), d_j, 1)
                 #utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
                 utils.plot_image(axes, y_ref[0,0,...].detach().cpu().numpy(), 0, 2)
@@ -413,11 +393,11 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
 
     return z_mu, z_logstd, z, y_recon, y_recon_tilt, losses, y_ref, y_ffts, mus, euler_samples, y_recon_ori, neg_mus, mask_sum
 
-def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
+def loss_function(z_mu, z_logstd, y, yt, y_recon, mask, beta,
                   y_recon_tilt=None, beta_control=None, vanilla=False,
                   group_stat=None, ind=None, mask_sum=None, losses=None,
                   args=None, it=None, y_ffts=None, zs=None, mus=None,
-                  neg_mus=None, y_recon_ori=None, euler_samples=None, snr2=None):
+                  neg_mus=None, y_recon_ori=None, euler_samples=None):
     # reconstruction error
     use_tilt = yt is not None
     B = y.size(0)
@@ -433,11 +413,11 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
             #print(y_recon.shape, y.shape, l2_diff.shape, mask_sum.shape)
             probs = F.softmax(-l2_diff.detach()*0.5, dim=-1).detach()
             #get argmax
-            #inds = torch.argmax(probs, dim=-1, keepdim=True)
-            #inds = inds.unsqueeze(-1).repeat(1, 1, 3)
-            ##get euler
-            ##print(inds, euler_samples)
-            #top_euler = torch.gather(euler_samples, 1, inds).squeeze(1).cpu()
+            inds = torch.argmax(probs, dim=-1, keepdim=True)
+            inds = inds.unsqueeze(-1).repeat(1, 1, 3)
+            #get euler
+            #print(inds, euler_samples)
+            top_euler = torch.gather(euler_samples, 1, inds).squeeze(1).cpu()
 
             #get k argmax
             #inds_ret = torch.topk(probs, 16, dim=-1)
@@ -449,14 +429,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
 
             #print(top_euler)
             #print(probs, euler_samples)
-            em_l2_loss = ((l2_diff*probs/mask_sum).sum(-1))#.mean()
-            #calculate snr
-            #print(y.shape, em_l2_loss.shape, mask_sum.shape, y.pow(2).sum(dim=(-1,-2)))
-            y2  = y.pow(2).sum(dim=(-1,-2)).squeeze()/mask_sum.squeeze()
-            mse = em_l2_loss.detach() + y2
-            #print(mse.shape, y2.shape)
-            snr = (1. - (mse/y2).mean())
-            em_l2_loss = em_l2_loss.mean()
+            em_l2_loss = ((l2_diff*probs/mask_sum).sum(-1)).mean()
             #print(em_l2_loss)
         else:
             em_l2_loss = (-2.*y_recon*y + y_recon**2).sum(dim=(-1,-2))
@@ -490,6 +463,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     #print(losses["kldiv"].shape, losses["tvl2"].shape)
     # set a unified mask_sum
     mask_sum = mask_sum.max()
+    #mask_sum = (70*2)**2
     if not vanilla:
         loss = gen_loss + beta_control*(beta-kld)**2/mask.sum().float()
     else:
@@ -506,7 +480,6 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         #c_mmd = utils.compute_cross_smmd(z_mu, mus, s=1/16, adaptive=False)
         # matching z dim to image space
         # compute cross entropy
-        a, b = 1.577, 0.8951
         c_en = (z_mu.unsqueeze(1) - mus).pow(2).sum(-1) + eps #(B, P)
         c_neg_en = (z_mu.unsqueeze(1) - neg_mus).pow(2).sum(-1) + eps #(B, N)
         #prob = ((-c_en).exp() + eps)/((-c_en).exp() + (-c_neg_en).exp().sum(-1, keepdim=True) + eps)
@@ -529,9 +502,9 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
         mmd = mmd.mean()
         #print("c_mmd: ", c_mmd, "mmd: ", mmd)
-        loss += lamb*(c_mmd + mmd + 0.25*cross_corr)*((beta+0.05)/1.05)/mask_sum
+        loss += lamb*(c_mmd + mmd + 0.5*cross_corr)*beta/mask_sum
         if "knn" in losses:
-            loss += lamb*losses["knn"]*((beta+0.05)/1.05)/mask_sum
+            loss += lamb*losses["knn"]*beta/mask_sum
         #loss = loss/(1 + lamb*beta)
         #print(mmd)
 
@@ -541,7 +514,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
             #print(logvar_diff.mean().detach(), z_mu_diff2.mean().detach(), var_diff.mean().detach())
             plt.show()
 
-    return loss, gen_loss, snr, mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler, mse.mean()
+    return loss, gen_loss, mmd, mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler
 
 def eval_z(model, lattice, data, batch_size, device, trans=None, use_tilt=False, ctf_params=None, use_real=False):
     assert not model.training
@@ -590,7 +563,8 @@ def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
     # save z
     if vanilla:
         posetracker.save_emb(out_z)
-        posetracker.save(out_pose)
+        #posetracker.save(out_pose)
+        posetracker.save_decoder_pose(out_pose)
     if not vanilla:
         with open(out_z,'wb') as f:
             pickle.dump(z_mu, f)
@@ -754,8 +728,10 @@ def main(args):
     do_pose_sgd = args.do_pose_sgd
     do_deform   = args.warp_type == 'deform' or args.encode_mode == 'grad'
     # use D-1 instead of D
+    log('{} {}'.format(args.poses, args.decoder_poses))
     posetracker = PoseTracker.load(args.poses, Nimg, D-1, 's2s2' if do_pose_sgd else None, ind,
-                                   deform=do_deform, deform_emb_size=args.zdim, latents=args.latents, batch_size=args.batch_size)
+                                   deform=do_deform, deform_emb_size=args.zdim, latents=args.latents,
+                                   batch_size=args.batch_size, decoder_infile=args.decoder_poses)
     posetracker.to(device)
     pose_optimizer = torch.optim.SparseAdam(list(posetracker.parameters()), lr=args.pose_lr) if do_pose_sgd else None
 
@@ -805,11 +781,11 @@ def main(args):
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
                 activation=activation, ref_vol=ref_vol, Apix=ctf_params[0,0],
                 template_type=args.template_type, warp_type=args.warp_type,
+                num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=ctf_grid,
                 deform_emb_size=args.deform_size,
                 downfrac=args.downfrac,
-                templateres=args.templateres,
-                tmp_prefix=args.tmp_prefix)
+                templateres=args.templateres)
 
 
     flog(model)
@@ -826,7 +802,7 @@ def main(args):
 
     # set model parameters to be encoder and decoder
     #model_parameters = list(model.parameters())+list(group_stat.parameters())
-    model_parameters = list(model.encoder.parameters()) + list(model.decoder.parameters()) #+ list(group_stat.parameters())
+    model_parameters = list(model.encoder.parameters()) + list(model.decoder.parameters()) + list(group_stat.parameters())
     pose_encoder = None
     optim = torch.optim.AdamW(model_parameters, lr=args.lr, weight_decay=args.wd)
 
@@ -842,7 +818,7 @@ def main(args):
     #                                 0.5 * (math.cos((epoch - warm_up_epochs)/(max_num_epochs - warm_up_epochs) * \
     #                                                 math.pi) + 1.)
     #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lr_lambda=warm_up_with_cosine_lr)
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, 1, gamma=0.96)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, 1, gamma=0.97)
 
     # Mixed precision training with AMP
     if args.amp:
@@ -876,7 +852,7 @@ def main(args):
             pretrained_dict = checkpoint['encoder_state_dict']
             model_dict = model.encoder.state_dict()
             # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k}
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k}
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict
@@ -946,33 +922,25 @@ def main(args):
 
     vanilla = args.pe_type == "vanilla"
     global_it = 0
-    bfactor = args.bfactor
-    lamb = args.lamb
     for epoch in range(start_epoch, num_epochs):
         t2 = dt.now()
         gen_loss_accum = 0
         loss_accum = 0
-        snr_accum = 0
+        kld_accum = 0
         eq_loss_accum = 0
         batch_it = 0
+        beta_control = args.beta_control
         # moving average
         ema_mu = 0.99
         gen_loss_ema, gen_loss_var_ema = 0.0, 0.
-        snr_ema = 0.0025
-        mse_ema = 0.01
-        mse_var_ema = 0.1
+        kld_ema = 2
+        kld_var_ema = 1
         mmd_ema = 0.
         mmd_var_ema = 0.1
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
-        beta_control = args.beta_control
-        #increasing bfactor slowly
-        #args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
-        args.bfactor = bfactor*(1. - 0.1/(1. + 3.*math.exp(-0.25*epoch)))*10./9.
-        beta_max    = 0.98 ** (epoch)
-        log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
-                        lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
 
+        log('learning rate {} for epoch {}'.format(lr_scheduler.get_last_lr(), epoch))
         for minibatch in data_generator:
             ind = minibatch[-1].to(device)
             y = minibatch[0].to(device)
@@ -984,8 +952,7 @@ def main(args):
             global_it = Nimg_train*epoch + batch_it
             save_image = (batch_it % (args.log_interval*4)) == 0
 
-            beta_control = args.beta_control*snr_ema
-            beta = beta_schedule(global_it) * beta_max
+            beta = beta_schedule(global_it)
 
             yr = torch.from_numpy(data.particles_real[ind.numpy()]).to(device) if args.use_real else None
             if do_pose_sgd:
@@ -995,9 +962,11 @@ def main(args):
             rot = rot.to(device)
             tran = tran.to(device)
             euler = euler.to(device)
+            decoder_euler = posetracker.get_decoder_euler(ind)
+            decoder_euler = decoder_euler.to(device)
             #print(euler)
             #ctf_param = ctf_params[ind] if ctf_params is not None else None
-            z_mu, loss, gen_loss, snr, l1_loss, tv_loss, mu2, std2, mmd, c_mmd, mse = \
+            z_mu, loss, gen_loss, kld, l1_loss, tv_loss, mu2, std2, mmd, c_mmd = \
                                         train_batch(model, lattice, y, yt, rot, tran, optim, beta,
                                               beta_control=beta_control, tilt=tilt, ind=ind,
                                               grid=grid, ctf_params=ctf_params, ctf_grid=ctf_grid,
@@ -1005,7 +974,8 @@ def main(args):
                                               save_image=save_image, group_stat=group_stat,
                                               it=batch_it, enc=None,
                                               args=args, euler=euler,
-                                              posetracker=posetracker, data=data, update_params=True, snr2=snr_ema)
+                                              posetracker=posetracker, data=data, update_params=True,
+                                              decoder_euler=decoder_euler)#((epoch - start_epoch)%2 != 1))
             update_it += 1
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
@@ -1013,15 +983,13 @@ def main(args):
             #    posetracker.set_emb(z_mu, ind)
 
             # logging
-            # compute moving average of generator loss, snr, and mmd
-            delta         = snr - snr_ema
-            snr_ema += (1-ema_mu)*delta
+            # compute moving average of generator loss, kld, and mmd
             delta         = gen_loss - gen_loss_ema
             gen_loss_ema += (1-ema_mu)*delta
             gen_loss_var_ema = ema_mu*(gen_loss_var_ema + (1-ema_mu)*delta**2)
-            delta         = mse - mse_ema
-            mse_ema += (1-ema_mu)*delta
-            mse_var_ema = ema_mu*(mse_var_ema + (1-ema_mu)*delta**2)
+            delta         = kld - kld_ema
+            kld_ema += (1-ema_mu)*delta
+            kld_var_ema = ema_mu*(kld_var_ema + (1-ema_mu)*delta**2)
             delta         = mmd - mmd_ema
             mmd_ema += (1-ema_mu)*delta
             mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
@@ -1030,34 +998,34 @@ def main(args):
             c_mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
 
             gen_loss_accum += gen_loss*B
-            snr_accum += snr*B
+            kld_accum += kld*B
             loss_accum += loss*B
 
             if batch_it % args.log_interval == 0:
                 log('# [Train Epoch: {}/{}] [{}/{} images] ' #gen_loss={:.6f}, '\
-                    'snr2_mu={:.3f}, beta={:.3f}, '                               \
+                    'mmd={:.3f}, beta={:.3f}, '                               \
                     'loss={:.4f}, l1={:.3f}, tv={:.3f}, '                     \
                     'mu={:.3f}, std={:.3f}, gen_loss_mu={:.4f}, ' \
-                    'gen_loss_std={:.3f}, mse_mu={:.3f}, mse_std={:.3f}, ' \
+                    'gen_loss_std={:.3f}, mmd_mu={:.3f}, mmd_std={:.3f}, ' \
                     'barlow_mu={:.4f}, barlow_std={:.4f}, c_mmd_mu={:.4f}, c_mmd_std={:.4f}'.format(epoch+1, num_epochs, batch_it,
-                                                    Nimg_train, snr_ema, beta, loss, l1_loss, tv_loss,
+                                                    Nimg_train, kld, beta, loss, l1_loss, tv_loss,
                                                      np.sqrt(mu2), np.sqrt(std2), gen_loss_ema, np.sqrt(gen_loss_var_ema),
-                                                    mse_ema, np.sqrt(mse_var_ema), mmd_ema, np.sqrt(mmd_var_ema), c_mmd_ema, np.sqrt(c_mmd_var_ema)))
+                                                    kld_ema, np.sqrt(kld_var_ema), mmd_ema, np.sqrt(mmd_var_ema), c_mmd_ema, np.sqrt(c_mmd_var_ema)))
             if batch_it % (args.log_interval*10) == 0:
                 out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
                 log('save {}'.format(out_z))
                 posetracker.save_emb(out_z)
                 out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
                 log('save {}'.format(out_pose))
-                posetracker.save(out_pose)
+                posetracker.save_decoder_pose(out_pose)
 
-        flog('# =====> Epoch: {} Average training gen_loss = {:.6}, SNR2 = {:.6f}, '\
+        flog('# =====> Epoch: {} Average training gen_loss = {:.6}, KLD = {:.6f}, '\
              'total loss = {:.6f}; Finished in {}'.format(epoch+1,
                                                          gen_loss_accum/Nimg_train,
-                                                         snr_accum/Nimg_train, loss_accum/Nimg_train, dt.now()-t2))
+                                                         kld_accum/Nimg_train, loss_accum/Nimg_train, dt.now()-t2))
 
         # validation
-        gen_loss_accum, snr_accum, loss_accum = 0, 0, 0
+        gen_loss_accum, kld_accum, loss_accum = 0, 0, 0
         for minibatch in val_data_generator:
             ind = minibatch[-1].to(device)
             y = minibatch[0].to(device)
@@ -1075,8 +1043,10 @@ def main(args):
             rot = rot.to(device)
             tran = tran.to(device)
             euler = euler.to(device)
+            decoder_euler = posetracker.get_decoder_euler(ind)
+            decoder_euler = decoder_euler.to(device)
             #ctf_param = ctf_params[ind] if ctf_params is not None else None
-            z_mu, loss, gen_loss, snr, l1_loss, tv_loss, mu2, std2, mmd, c_mmd, mse = \
+            z_mu, loss, gen_loss, kld, l1_loss, tv_loss, mu2, std2, mmd, c_mmd = \
                                         train_batch(model, lattice, y, yt, rot, tran, optim, beta,
                                               beta_control=beta_control, tilt=tilt, ind=ind,
                                               grid=grid, ctf_params=ctf_params, ctf_grid=ctf_grid,
@@ -1084,18 +1054,19 @@ def main(args):
                                               save_image=save_image, group_stat=group_stat,
                                               it=batch_it, enc=None,
                                               args=args, euler=euler,
-                                              posetracker=posetracker, data=data, update_params=False)
+                                              posetracker=posetracker, data=data, update_params=False,
+                                              decoder_euler=decoder_euler)
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
             # logging
             gen_loss_accum += gen_loss*B
-            snr_accum += snr*B
+            kld_accum += kld*B
             loss_accum += loss*B
 
-        flog('# =====> Epoch: {} Average validation gen_loss = {:.6}, SNR2 = {:.6f}, '\
+        flog('# =====> Epoch: {} Average validation gen_loss = {:.6}, KLD = {:.6f}, '\
              'total loss = {:.6f}; Finished in {}'.format(epoch+1,
                                                          gen_loss_accum/Nimg_test,
-                                                         snr_accum/Nimg_test, loss_accum/Nimg_test, dt.now()-t2))
+                                                         kld_accum/Nimg_test, loss_accum/Nimg_test, dt.now()-t2))
 
 
         if args.checkpoint and epoch % args.checkpoint == 0:

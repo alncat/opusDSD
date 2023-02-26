@@ -73,6 +73,7 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
     log('Generating volumes...')
     for i in range(num_pcs):
         start, end = np.percentile(pc[:,i],(5,95))
+        log(f'traversing pc {i} from {start} to {end}')
         z_pc = analysis.get_pc_traj(pca, z.shape[1], 10, i+1, start, end)
         if not os.path.exists(f'{outdir}/pc{i+1}'):
             os.mkdir(f'{outdir}/pc{i+1}')
@@ -167,8 +168,8 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
         analysis.scatter_annotate(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True,
                                   xlim=(pmin, pmax), ylim=(pmin, pmax),
                                   alpha=.1, s=.5)
-        plt.xlabel('UMAP1')
-        plt.ylabel('UMAP2')
+        plt.xlabel('UMAP1', fontsize=14, weight='bold')
+        plt.ylabel('UMAP2', fontsize=14, weight='bold')
         plt.savefig(f'{outdir}/kmeans{K}/umap.png')
 
         g = analysis.scatter_annotate_hex(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True)
@@ -223,6 +224,19 @@ def main(args):
         os.mkdir(outdir)
 
     if args.vanilla:
+        losses = analysis.parse_loss_vanilla(f"{workdir}/run.log", "validation")
+        #plt.ylabel('validation loss')
+        #plt.xlabel('step')
+        plt.plot(np.arange(1,len(losses)+1), losses, label="validation")
+        #plt.savefig(f"{workdir}/val_losses.png")
+        losses = analysis.parse_loss_vanilla(f"{workdir}/run.log", "training")
+        plt.ylabel('loss')
+        plt.xlabel('epoch')
+        plt.plot(np.arange(1,len(losses)+1), losses, label="training")
+        plt.xticks(range(1, len(losses)+1))
+        plt.legend(loc="upper right")
+        plt.savefig(f"{workdir}/train_losses.png")
+
         z = torch.load(zfile)["mu"].cpu().numpy()
         log("loading {}, z shape {}".format(zfile, z.shape))
         Nimg = z.shape[0]

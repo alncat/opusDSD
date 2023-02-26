@@ -43,7 +43,7 @@ class CosSchedule:
         self.start_x = start_x
         self.start_y = start_y
         self.coef = (end_y - start_y) / (end_x - start_x)
-        self.period = (end_x - start_x)*1.25
+        self.period = (end_x - start_x)*1.5#1.25
 
     def __call__(self, x):
         return np.clip(np.mod(x - self.start_x, self.period) * self.coef + self.start_y,

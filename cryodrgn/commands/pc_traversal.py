@@ -4,6 +4,7 @@ Generate trajectory along PCs
 
 import argparse
 import numpy as np
+import torch
 import sys, os
 import pickle
 from scipy.spatial.distance import cdist
@@ -29,8 +30,10 @@ def analyze_data_support(z, traj, cutoff=3):
 def main(args):
     if not os.path.exists(args.o):
         os.makedirs(args.o)
-    
-    z = pickle.load(open(args.z,'rb'))
+
+    #z = pickle.load(open(args.z,'rb'))
+    z = torch.load(args.z)["mu"].cpu().numpy()
+
     zdim = z.shape[1]
     pc, pca = analysis.run_pca(z)
 
@@ -49,7 +52,7 @@ def main(args):
             stop = np.percentile(pc[:,dim-1], lim[1])
             print('Limits: {}, {}'.format(start, stop))
             traj = analysis.get_pc_traj(pca, zdim, args.n, dim, start, stop)
-        
+
         print('Neighbor count along trajectory:')
         print(analyze_data_support(z, traj))
 

@@ -75,8 +75,9 @@ class Graph(object):
 
 
 def main(args):
-    data_np = pickle.load(open(args.data, 'rb'))
-    data = torch.from_numpy(data_np)
+    #data_np = pickle.load(open(args.data, 'rb'))
+    #data = torch.from_numpy(data_np)
+    data = torch.load(args.data)["mu"].cpu().numpy()
 
     if args.max_images is not None:
         data = data[:args.max_images]
@@ -128,7 +129,7 @@ def main(args):
         path, total_distance = graph.find_path(src, dest)
         dd = data[path].cpu().numpy()
         dists = ((dd[1:,:] - dd[0:-1,:])**2).sum(axis=1)**.5
-        
+
         if path is not None:
             if full_path and full_path[-1] == path[0]:
                 full_path.extend(path[1:])
@@ -150,7 +151,7 @@ def main(args):
             print('Euclidean distance: {}'.format(((dd[0]-dd[-1])**2).sum()**.5))
         else:
             print("Could not find path!")
-    
+
     if not os.path.exists(os.path.dirname(args.o)):
         os.makedirs(os.path.dirname(args.o))
     print(args.o)

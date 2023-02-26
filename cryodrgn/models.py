@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint_sequential
-from . import sync_batchnorm
 import matplotlib.pyplot as plt
 import healpy as hp
 from . import pose_encoder
@@ -46,7 +45,8 @@ class HetOnlyVAE(nn.Module):
             render_size=140,
             downfrac=0.5,
             templateres=192,
-            tmp_prefix="ref"):
+            tmp_prefix="ref",
+            window_r=0.85):
         super(HetOnlyVAE, self).__init__()
         self.lattice = lattice
         self.zdim = zdim
@@ -64,15 +64,16 @@ class HetOnlyVAE(nn.Module):
             log("model: loading mask with nonzeros between {}, {}, {}".format(in_vol_mins, in_vol_maxs, ref_vol.shape))
             in_vol_maxs = ref_vol.shape[-1] - in_vol_maxs
             in_vol_min = min(in_vol_maxs.min(), in_vol_mins.min())
-            mask_frac = (ref_vol.shape[-1] - in_vol_min*2 + 6) / ref_vol.shape[-1]
+            mask_frac = (ref_vol.shape[-1] - in_vol_min*2 + 4) / ref_vol.shape[-1]
             log("model: masking volume using fraction: {}".format(mask_frac))
             self.window_r = min(mask_frac, 0.95)
             if templateres == 256:
                 self.window_r = min(self.window_r, 0.85)
         else:
-            self.window_r = downfrac
+            self.window_r = window_r
         self.down_vol_size = int(self.render_size*self.window_r)//2*2
-        self.encoder_image_size = int(self.render_size*110/self.down_vol_size)//2*2
+        self.encoder_crop_size = self.down_vol_size
+        self.encoder_image_size = int(self.render_size*self.encoder_crop_size/self.down_vol_size)//2*2
         log("model: image supplemented into encoder will be of size {}".format(self.encoder_image_size))
         self.ref_vol = ref_vol
 
@@ -105,7 +106,7 @@ class HetOnlyVAE(nn.Module):
             self.encoder = FixedEncoder(self.num_struct, self.zdim)
             self.fixed_deform = True
         elif encode_mode == 'grad':
-            self.encoder = Encoder(self.zdim, lattice.D, crop_vol_size=110, in_mask=ref_vol, window_r=self.window_r)
+            self.encoder = Encoder(self.zdim, lattice.D, crop_vol_size=self.encoder_crop_size, in_mask=ref_vol, window_r=self.window_r)
             #self.shape_encoder = pose_encoder.PoseEncoder(image_size=128, mode="shape")
             self.fixed_deform = True
         else:
@@ -290,6 +291,12 @@ class HetOnlyVAE(nn.Module):
         decout["y_recon"] = fft.torch_ifft2_center(y_recon_fft)
         #decout["y_recon_ori"] = y_recon_ori
         #decout["y_ref"] = y_ref
+        # substract reconstruction to form diff image
+        images = decout["y_recon"]
+        rnd_factor = torch.rand([images.shape[0], 1, 1, 1], device=images.device)*0.2
+        decout["y_recon_mean"] = images.detach().mean(dim=1, keepdim=True)
+        decout["y_ref"] -= decout["y_recon_mean"]*rnd_factor
+        decout["y_ref"] /= (1. - rnd_factor)
 
         return decout
 
@@ -404,7 +411,7 @@ class ConvTemplate(nn.Module):
             template3 = []
             template4 = []
             for i in range(int(np.log2(templateres)) - 3):
-                if i < 3: #2:
+                if i < 2: #2:
                     template3.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
                     template3.append(nn.LeakyReLU(0.2))
                 else:
@@ -433,7 +440,7 @@ class ConvTemplate(nn.Module):
 
         utils.initmod(self.conv_out, gain=1./np.sqrt(templateres))
 
-        self.intermediate_size = int(32*self.templateres/256)
+        self.intermediate_size = int(16*self.templateres/256)
         log('convtemplate: the output volume is of size {}, intermediate activations will be resampled from 32 to {}'.format(self.templateres, self.intermediate_size))
 
         # output rigid grid transformations
@@ -493,7 +500,8 @@ class Encoder(nn.Module):
         self.window_r = window_r #(the cropping fraction of input mask)
         #downsample volume
         self.transformer_e = SpatialTransformer(self.crop_vol_size, render_size=self.crop_vol_size)
-        self.out_dim = (self.crop_vol_size)//128 + 1
+        #self.out_dim = (self.crop_vol_size)//128 + 1
+        self.out_dim = 1
         log("encoder: the input image size is {}".format(self.crop_vol_size))
         #downsample mask
         if in_mask is not None:
@@ -517,9 +525,16 @@ class Encoder(nn.Module):
         n_layers = int(np.log2(128//2))
         inchannels = 1
         outchannels = 32
+        self.down2 = []
+        downsample1 = []
+        self.intermediate_size = 12
         for i in range(n_layers):
-            downsample.append(nn.Conv3d(inchannels, outchannels, 4, 2, 1))
-            downsample.append(nn.LeakyReLU(0.2))
+            if i < 3:
+                downsample.append(nn.Conv3d(inchannels, outchannels, 4, 2, 1))
+                downsample.append(nn.LeakyReLU(0.2))
+            else:
+                downsample1.append(nn.Conv3d(inchannels, outchannels, 4, 2, 1))
+                downsample1.append(nn.LeakyReLU(0.2))
             inchannels = outchannels
             #if inchannels == outchannels:
             outchannels = min(inchannels * 2, 512)
@@ -528,6 +543,7 @@ class Encoder(nn.Module):
         #downsample.append(nn.Conv3d(inchannels, self.out_channels, 4, 2, 1))
         #downsample.append(nn.LeakyReLU(0.2))
         self.down1 = nn.Sequential(*downsample)
+        self.down2 = nn.Sequential(*downsample1)
         #downsample.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
 
         #self.down1 = nn.Sequential(
@@ -537,7 +553,7 @@ class Encoder(nn.Module):
         #        nn.Conv3d(32, 32, 4, 2, 1), nn.LeakyReLU(0.2),#5
         #        nn.Conv3d(32, 64, 4, 2, 1), nn.LeakyReLU(0.2),#2
         #        nn.Conv3d(64, self.out_channels, 4, 2, 1), nn.LeakyReLU(0.2))#1
-        self.down2 = nn.Sequential(
+        self.down3 = nn.Sequential(
                 nn.Linear(self.out_channels * self.out_dim ** 3, 512), nn.LeakyReLU(0.2))
 
         self.mu = nn.Linear(512, self.zdim)
@@ -545,6 +561,7 @@ class Encoder(nn.Module):
 
         utils.initseq(self.down1)
         utils.initseq(self.down2)
+        utils.initseq(self.down3)
         utils.initmod(self.mu)
         utils.initmod(self.logstd)
 
@@ -640,8 +657,10 @@ class Encoder(nn.Module):
 
         enc1 = self.down1(x3d_downs)
         #print(enc1.shape, self.out_channels, self.out_dim)
-        encs = enc1.view(B, self.out_dim ** 3 *self.out_channels)
-        encs = self.down2(encs)
+        enc1 = F.interpolate(enc1, size=self.intermediate_size, mode="trilinear", align_corners=ALIGN_CORNERS) # 12^3
+        enc2 = self.down2(enc1)
+        encs = enc2.view(B, self.out_dim ** 3 *self.out_channels)
+        encs = self.down3(encs)
 
         mu = self.mu(encs)
         if self.training:
@@ -866,7 +885,7 @@ class VanillaDecoder(nn.Module):
             if in_vol is not None:
                 log("decoder: loading mask {}, volume render size is {}, volume of interest is {}".format(in_vol.shape, self.render_size, self.crop_vol_size))
                 #resample input mask to render_size
-                mask_frac = (self.crop_vol_size - 4)/self.render_size
+                mask_frac = (self.crop_vol_size - 2)/self.render_size
                 crop_size = int(in_vol.shape[-1]*mask_frac)//2*2
                 crop_vol = self.transformer.crop(in_vol, crop_size).unsqueeze(0).unsqueeze(0)
 
@@ -1246,7 +1265,7 @@ class VanillaDecoder(nn.Module):
                         euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
 
                         euler01 = euler_i[..., :2]
-                        neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=64, depth=0) #hp_order=64, depth=0)
+                        neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=32, depth=0) #hp_order=64, depth=0)
 
                         len_euler = neighbor_eulers.shape[0]
                         n_eulers = torch.cat([neighbor_eulers, rand_ang.repeat(len_euler, 1)], dim=-1)
@@ -1413,7 +1432,7 @@ class VanillaDecoder(nn.Module):
                     euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
 
                     euler01 = euler_i[..., :2]
-                    neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=64, depth=0) #hp_order=64, depth=0)
+                    neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=32, depth=0) #hp_order=64, depth=0)
 
                     len_euler = neighbor_eulers.shape[0]
                     n_eulers = torch.cat([neighbor_eulers, rand_ang.repeat(len_euler, 1)], dim=-1)

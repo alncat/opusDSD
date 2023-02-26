@@ -64,6 +64,10 @@ class PoseTracker(nn.Module):
             #reset euler using hopf
             self.eulers = self.hopfs
             eulers_np = self.hopfs.cpu().numpy()
+            if self.decoder_eulers is not None:
+                #convert euler to hopf
+                self.decoder_eulers = lie_tools.euler_to_hopf(self.decoder_eulers)
+                print("hopf difference between encoder and decoder: ", torch.sum((self.eulers - self.decoder_eulers).abs())/self.hopfs.shape[0], self.hopfs.shape[0])
 
             euler0 = eulers_np[:, 0]*np.pi/180 #(-180, 180)
             euler1 = eulers_np[:, 1]*np.pi/180 #(0, 180)
@@ -205,7 +209,7 @@ class PoseTracker(nn.Module):
         else: # rotation pickle or poses pickle
             poses = utils.load_pkl(infile[0])
             if decoder_infile is not None:
-                decoder_poses = utils.load_pkl(decoder_infile[0])
+                decoder_poses = utils.load_pkl(decoder_infile)
             else:
                 decoder_poses = None
             if type(poses) != tuple: poses = (poses,)
@@ -237,6 +241,7 @@ class PoseTracker(nn.Module):
             trans *= D # convert from fraction to pixels
             log("loaded eulers")
             eulers = poses[2]
+            decoder_eulers = decoder_poses[2] if decoder_poses is not None else None
             if ind is not None:
                 if len(trans) > Nimg: # HACK
                     eulers = eulers[ind]
@@ -248,7 +253,17 @@ class PoseTracker(nn.Module):
 
         if latents is not None:
             latents = torch.load(latents)
-        return cls(rots, trans, D, emb_type, deform, deform_emb_size, eulers, latents, batch_size)
+        return cls(rots, trans, D, emb_type, deform, deform_emb_size, eulers, latents, batch_size, decoder_eulers_np=decoder_eulers, decoder_trans_np=decoder_trans)
+
+    def save_decoder_pose(self, out_pkl):
+        r = self.rots.cpu().numpy()
+        t = self.decoder_trans.cpu().numpy()
+        t = t/self.D # convert from pixels to extent
+        # convert from hopf back to euler
+        new_eulers = lie_tools.hopf_to_euler(self.decoder_eulers)
+        e = new_eulers.cpu().numpy()
+        poses = (r,t,e)
+        pickle.dump(poses, open(out_pkl,'wb'))
 
     def save(self, out_pkl):
         if self.emb_type == 'quat':
@@ -265,6 +280,7 @@ class PoseTracker(nn.Module):
                 t = self.trans_emb.weight.data.cpu().numpy()
             t = t/self.D # convert from pixels to extent
             if self.eulers is not None:
+                # convert from hopf back to euler
                 new_eulers = lie_tools.hopf_to_euler(self.eulers)
                 #e = self.eulers.cpu().numpy()
                 e = new_eulers.cpu().numpy()
@@ -281,18 +297,15 @@ class PoseTracker(nn.Module):
             euler = self.eulers[ind]
             return euler
 
-    def get_euler_particle(self, ind):
-        if self.emb_type is None:
-            euler = self.euler_particles[ind]
-            weight = self.particle_weights[ind]
-            return euler, weight
-
     def set_euler(self, euler, ind):
         self.eulers[ind] = euler
 
-    def set_euler_particle(self, euler_particles, weights, ind):
-        self.euler_particles[ind] = euler_particles
-        self.particle_weights[ind] = weigths
+    def get_decoder_euler(self, ind):
+        euler = self.decoder_eulers[ind]
+        return euler
+
+    def set_decoder_euler(self, euler, ind):
+        self.decoder_eulers[ind] = euler
 
     def get_pose(self, ind):
         if self.emb_type is None:

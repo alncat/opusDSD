@@ -22,9 +22,20 @@ def parse_loss(f):
     try:
         loss = [x.strip().split()[-1] for x in lines]
         loss = np.asarray(loss).astype(np.float32)
+        print(loss)
     except:
         loss = [x.split()[-4][:-1] for x in lines]
         loss = np.asarray(loss).astype(np.float32)
+        print(loss)
+    return loss
+
+def parse_loss_vanilla(f, prefix):
+    '''Parse loss from run.log'''
+    lines = open(f).readlines()
+    lines = [x for x in lines if prefix in x]
+    loss = [x.split()[10][:-1] for x in lines]
+    loss = np.asarray(loss).astype(np.float32)
+    print(loss)
     return loss
 
 ### Dimensionality reduction ###
@@ -219,8 +230,12 @@ def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels
         assert centers is not None
         if labels is None:
             labels = range(len(centers))
+        centers_an = centers[:, 0:2]+np.array([.1, .1])
+        #centers_an[10] += np.array([0.3, -0.1])
+        #centers_an[1] += np.array([0.1, -0.2])
+        #centers_an[8] += np.array([-0.3, 0.])
         for i in labels:
-            ax.annotate(str(i), centers[i,0:2]+np.array([.1,.1]))
+            ax.annotate(str(i), centers_an[i], fontsize=14, weight="bold")
     return fig, ax
 
 def scatter_annotate_hex(x, y, centers=None, centers_ind=None, annotate=True, labels=None):

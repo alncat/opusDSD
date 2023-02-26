@@ -170,47 +170,32 @@ def data_augmentation(y, trans, ctf_grid, grid, window_r, downfrac=0.5):
         y_fft = fft.torch_fft2_center(y)
         # undo experimental image translation
         #print(trans)
-        #trans = torch.clamp(trans, min=-10, max=10)
+        #trans = torch.clamp(trans, min=-8, max=8)
         #print(trans)
         y_fft = ctf_grid.translate_ft(y_fft, -trans)
 
-        #window y
-        y = fft.torch_ifft2_center(y_fft)
-        mask_real = grid.get_circular_mask(window_r)
-        y *= mask_real
-        y_fft = fft.torch_fft2_center(y)
-
         # apply b factor
-        random_b = np.random.rand() - 0.5
-        b_fact = ctf_grid.get_b_factor(b=random_b*2)
-        y_fft_ori = y_fft*b_fact
-
-        random_b = np.random.rand() - 0.5
-        b_fact = ctf_grid.get_b_factor(b=random_b*2)
+        b_fact = ctf_grid.get_b_factor(b=.25)
         y_fft *= b_fact
 
         #print(y.shape, y_fft.shape)
+        y = fft.torch_ifft2_center(y_fft)
         # window y
-        #y = fft.torch_ifft2_center(y_fft)
-        #mask_real = grid.get_circular_mask(window_r)
-        #y *= mask_real
+        mask_real = grid.get_circular_mask(window_r)
+        y *= mask_real
 
         # downsample in frequency space by applying cos filter
         #y_fft = utils.mask_image_fft(y, mask, ctf_grid)
+        y_fft = fft.torch_fft2_center(y)
 
         down_size = (int(y.shape[-1]*downfrac)//2)*2
         y_fft_s = torch.fft.fftshift(y_fft, dim=(-2))
         y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
         y_fft = torch.fft.ifftshift(y_fft_crop, dim=(-2))
         y = fft.torch_ifft2_center(y_fft)
-
-        y_fft_s = torch.fft.fftshift(y_fft_ori, dim=(-2))
-        y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
-        y_fft_ori = torch.fft.ifftshift(y_fft_crop, dim=(-2))
-
         #y_rand = ctf_grid.sample_local_translation(y_fft, 1, 1.)
         #y = fft.torch_ifft2_center(y_rand)
-        return y, y_fft_ori
+        return y, y_fft
 
 def preprocess_input(y, yt, lattice, trans, vanilla=True):
     # center the image
@@ -265,7 +250,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             # ctf_params[:,0] is the angpix
             ctf_param = ctf_params[ind]
             freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/ctf_params[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
-            c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=args.bfactor).view(B,D-1,-1) #(B, )
+            c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=args.bfactor, mtf=None).view(B,D-1,-1) #(B, )
 
     # encode
     if not vanilla:
@@ -277,7 +262,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         z_mu, z_logvar = _unparallelize(model).encode(*input_)
         z = _unparallelize(model).reparameterize(z_mu, z_logvar)
     else:
-        z_mu, z_logvar, z = 0., 0., 0.
+        z_mu, z_logstd, z = 0., 0., 0.
 
     plot = args.plot and it % (args.log_interval*8) == B
     if plot:
@@ -297,21 +282,16 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             with torch.no_grad():
                 # undo experimental image translation
                 #y_fft_mask = ctf_grid.translate_ft(y_fft, -trans)
-                if y_fft.shape[-2] != model.encoder_image_size:
-                    y_fft_s    = torch.fft.fftshift(y_fft, dim=(-2))
-                    #downsample image, previous default is 128
-                    y_fft_crop = utils.crop_fft(y_fft_s, model.encoder_image_size)*(model.encoder_image_size/y_fft.shape[-2])**2
-                    y_fft_crop = torch.fft.ifftshift(y_fft_crop, dim=(-2))
-                    #diff = y_fft_masked * c.unsqueeze(1)
-                    #diff /= (c.pow(2).unsqueeze(1) + 0.5)
-                    diff = fft.torch_ifft2_center(y_fft_crop)#*mask_real
-                else:
-                    diff = fft.torch_ifft2_center(y_fft)#*mask_real
-                assert diff.shape[-1] == model.encoder_image_size, "y shape {y.shape[-1]} should equal with {model.encoder_image_size}"
-
+                y_fft_s    = torch.fft.fftshift(y_fft, dim=(-2))
+                #downsample image, previous default is 128
+                y_fft_crop = utils.crop_fft(y_fft_s, model.encoder_image_size)*(model.encoder_image_size/out_size)**2
+                y_fft_crop = torch.fft.ifftshift(y_fft_crop, dim=(-2))
+                #diff = y_fft_masked * c.unsqueeze(1)
+                #diff /= (c.pow(2).unsqueeze(1) + 0.5)
+                diff = fft.torch_ifft2_center(y_fft_crop)#*mask_real
             if plot and True:
                 #i_c = fft.torch_ifft2_center(y_fft_crop)
-                print(f"ctf {c.shape}, y_fft {y_fft.shape}")
+                print("ctf, y_fft", c.shape, y_fft_s.shape)
                 #utils.plot_image(axes, exp_fac.detach().cpu().numpy(), 0)
                 #utils.plot_image(axes, i_c[d_i,d_i,...].detach().cpu().numpy(), d_i, 0, log=True)
                 #utils.plot_image(axes, diff[d_i,d_i,...].detach().cpu().numpy(), d_i, 2, log=True)
@@ -328,14 +308,17 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         z, encout = model.vanilla_encode(diff, rot, trans, eulers=euler, num_gpus=args.num_gpus)
         #print(z - encout['z_mu'])
         # sample nearest neighbors
-        posetracker.set_emb(encout["z_mu"], ind)
-        mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
+        if args.encode_mode == "grad":
+            posetracker.set_emb(encout["z_mu"], ind)
+            mus, others, top_mus, neg_mus = sample_neighbors(posetracker, data, euler, rot,
                                                 ind, ctf_params, ctf_grid, grid, args, W, out_size)
-        mus = mus.to(z.get_device())
-        neg_mus = neg_mus.to(z.get_device())
-        others = None
+            mus = mus.to(z.get_device())
+            neg_mus = neg_mus.to(z.get_device())
+            others = None
         #neg_idices = None
         # mix knns
+        else:
+            mus = neg_mus = others = None
         # decode latents
         decout = model.vanilla_decode(rot, trans, z=z, save_mrc=save_image, eulers=euler,
                                       ref_fft=y, ctf=c, encout=encout, others=others, mask=mask_real)
@@ -353,15 +336,17 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             z_mu = encout["z_mu"]
             z_logstd = encout["z_logstd"]
             #z = encout["encoding"]
+
         y_recon_ori = decout["y_recon_ori"]
         # retrieve mask
         mask = decout["mask"]
         mask_sum = decout["mask"].sum(dim=(-1,-2))
         # retrieve nearest neighbor in the same batch
-        z_nn = encout["z_knn"]
-        diff = (z_mu.unsqueeze(1) - z_nn).pow(2).sum(-1)
-        #print(diff)
-        losses["knn"] = torch.log(1 + diff).mean()
+        if args.encode_mode == "grad":
+            z_nn = encout["z_knn"]
+            diff = (z_mu.unsqueeze(1) - z_nn).pow(2).sum(-1)
+            #print(diff)
+            losses["knn"] = torch.log(1 + diff).mean()
         #print(y_recon_ori[:, :1, ...].shape)
 
     if use_ctf:
@@ -375,12 +360,14 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             d_i, d_j, d_k = 1, 1, 0
             if plot:
                 #correlations = F.cosine_similarity(y_recon_ori[:,d_k,...].view(B,-1), y_ref[:,d_k,...].view(B,-1))
-                utils.plot_image(axes, y_recon_ori[0,0,...].detach().cpu().numpy(), 0, 0, log=True, log_msg="y_recon_ori")
-                #utils.plot_image(axes, y_recon_ori[d_i,d_k,...].detach().cpu().numpy(), d_j, 0, log=True)
+                utils.plot_image(axes, y_recon_ori[0,0,...].detach().cpu().numpy(), 0, 0, log=True)
                 #print(encout["rotated_x"].shape)
                 #utils.plot_image(axes, encout["rotated_x"][0,...].detach().cpu().numpy(), 0, 0, log=True)
-                utils.plot_image(axes, encout["rotated_x"][d_i,...].detach().cpu().numpy(), d_j, 0, log=True, log_msg="rotated_x")
-                utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2, log=True, log_msg="y_ref")
+                if "rotated_x" in encout:
+                    utils.plot_image(axes, encout["rotated_x"][d_i,...].detach().cpu().numpy(), d_j, 0, log=True)
+                else:
+                    utils.plot_image(axes, y_recon_ori[d_i,d_k,...].detach().cpu().numpy(), d_j, 0, log=True)
+                utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
                 #utils.plot_image(axes, y[d_i,...].detach().numpy(), 1)
                 #log("correlations w.o. mask: {}".format(correlations.detach().cpu().numpy()))
 
@@ -395,7 +382,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
                         log("group_scales: {}".format(group_scales))
                     #y_recon_fft *= group_scales.unsqueeze(-1).unsqueeze(-1)
             if plot:
-                utils.plot_image(axes, y_recon[0,0,...].detach().cpu().numpy(), 0, 1, log_msg="y_recon")
+                utils.plot_image(axes, y_recon[0,0,...].detach().cpu().numpy(), 0, 1)
                 utils.plot_image(axes, y_recon[d_i,d_k,...].detach().cpu().numpy(), d_j, 1)
                 #utils.plot_image(axes, y_ref[d_i,d_k,...].detach().cpu().numpy(), d_j, 2)
                 utils.plot_image(axes, y_ref[0,0,...].detach().cpu().numpy(), 0, 2)
@@ -474,7 +461,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         kld = losses['kldiv'].mean() if 'kldiv' in losses else torch.tensor(0.)
 
     # total loss
-    mu2, std2 = torch.tensor(0.), torch.tensor(0.)
+    mu2, std2, cross_corr, c_mmd  = torch.tensor(0.), torch.tensor(0.), torch.tensor(0.), torch.tensor(0.)
 
     if "mu2" in losses:
         mu2 = losses["mu2"]
@@ -492,6 +479,8 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     mask_sum = mask_sum.max()
     if not vanilla:
         loss = gen_loss + beta_control*(beta-kld)**2/mask.sum().float()
+    elif args.encode_mode == "fixed":
+        loss = gen_loss + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
     else:
         #loss = gen_loss + 1e-4*beta_control*beta*kld/mask_sum.float() + beta_control*beta*1e-5*torch.mean(losses['tvl2'] + 1e-1*losses['l2'])
         #alpha = 0.005*beta #0.01*beta
@@ -752,7 +741,7 @@ def main(args):
     # load poses
     #if args.do_pose_sgd: assert args.domain == 'hartley', "Need to use --domain hartley if doing pose SGD"
     do_pose_sgd = args.do_pose_sgd
-    do_deform   = args.warp_type == 'deform' or args.encode_mode == 'grad'
+    do_deform   = args.warp_type == 'deform' or args.encode_mode in ['grad', 'fixed']
     # use D-1 instead of D
     posetracker = PoseTracker.load(args.poses, Nimg, D-1, 's2s2' if do_pose_sgd else None, ind,
                                    deform=do_deform, deform_emb_size=args.zdim, latents=args.latents, batch_size=args.batch_size)
@@ -826,14 +815,9 @@ def main(args):
 
     # set model parameters to be encoder and decoder
     #model_parameters = list(model.parameters())+list(group_stat.parameters())
-    model_parameters = list(model.encoder.parameters()) + list(model.decoder.parameters()) #+ list(group_stat.parameters())
+    model_parameters = list(model.encoder.parameters()) + list(model.decoder.parameters()) + list(group_stat.parameters())
     pose_encoder = None
     optim = torch.optim.AdamW(model_parameters, lr=args.lr, weight_decay=args.wd)
-
-    optimD = None
-    #if args.encode_mode == "grad":
-    #    discriminator_parameters = list(model.shape_encoder.parameters())
-    #    optimD = torch.optim.AdamW(discriminator_parameters, lr=args.lr, weight_decay=args.wd)
 
     # learning rate scheduler
     #warm_up_epochs = 2
@@ -876,7 +860,7 @@ def main(args):
             pretrained_dict = checkpoint['encoder_state_dict']
             model_dict = model.encoder.state_dict()
             # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k}
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k}
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict
@@ -966,9 +950,8 @@ def main(args):
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
         beta_control = args.beta_control
-        #increasing bfactor slowly
-        #args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
-        args.bfactor = bfactor*(1. - 0.1/(1. + 3.*math.exp(-0.25*epoch)))*10./9.
+        #decreasing bfactor slowly
+        args.bfactor = bfactor*(1. - 0.3/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
         beta_max    = 0.98 ** (epoch)
         log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
                         lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))

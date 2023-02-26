@@ -99,12 +99,13 @@ def main(args):
     Apix = cfg['model_args']['Apix']
     templateres = cfg['model_args']['templateres']
     #args.Apix = down_vol_size/((D - 1)*downfrac*0.85)*Apix
-    downfrac = down_vol_size/((D-1)*downfrac)*Apix/args.Apix
+    window_r = down_vol_size/((D-1)*downfrac)
+    downfrac *= Apix/args.Apix
     log("Apix: changing from training apix {} to target apix {}".format(Apix, args.Apix))
     log("the output volume by convnet will further downsample by downfrac: {} to achieve desired apix".format(downfrac))
     assert templateres is not None
     log("templateres: output volume of convnet is of size {}".format(templateres))
-    log("the final output volume rendered by spatial transformer is of size {}".format(int((D-1)*downfrac*0.85)))
+    log("the final output volume rendered by spatial transformer is of size {}".format(int((D-1)*downfrac*window_r)))
 
     if args.downsample:
         assert args.downsample % 2 == 0, "Boxsize must be even"
@@ -119,7 +120,7 @@ def main(args):
                 num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=None,
                 deform_emb_size=args.deform_size, downfrac=downfrac,
-                templateres=templateres)
+                templateres=templateres, window_r=window_r)
 
     vanilla = args.pe_type == "vanilla"
 
@@ -145,7 +146,7 @@ def main(args):
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict
-            model.encoder.load_state_dict(model_dict)
+            #model.encoder.load_state_dict(model_dict)
 
             pretrained_dict = checkpoint['decoder_state_dict']
             model_dict = model.decoder.state_dict()

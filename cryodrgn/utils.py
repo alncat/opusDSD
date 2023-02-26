@@ -109,11 +109,11 @@ def standardize_image(y, log=False):
         print(y_mean, y_std)
     return y
 
-def plot_image(axes, y_image, i, j, log=False):
+def plot_image(axes, y_image, i, j, log=False, log_msg=""):
     y_image_std = np.std(y_image)
     y_image_mean = np.mean(y_image)
     if log:
-        print(y_image_mean, y_image_std)
+        print(log_msg, y_image_mean, y_image_std)
     axes[i][j].imshow((y_image - y_image_mean)/y_image_std, cmap='gray')
 
 def log(msg):
@@ -412,8 +412,8 @@ def compute_cross_corr(mu):
     #mu = F.normalize(mu, dim=1)
     #print(mu, mu.pow(2).sum(-1))
     mu_mean = mu.mean(0)
-    mu_std = mu.std(0)
-    mu = (mu - mu_mean)/(mu_std + 1e-5)
+    #mu_std = mu.std(0)
+    mu = (mu - mu_mean)#/(mu_std + 1e-5)
     kernel = torch.matmul(mu[...,None], mu[...,None,:])
     #print(kernel.shape, torch.eye(mu.shape[-1]))
     #print(kernel.mean(0))
