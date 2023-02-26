@@ -56,7 +56,7 @@ A more colorful one, the particles are colored according to their projection cla
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
-Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image. The uneven distribution of pose parameters reflects the pose assignment errors introduced by performing consensus refinement on dynamical cryo-EM dataset. The pose assignment error refers to the difference between the pose parameter of the particle obtained by aligning with its ground-truth conformation and its pose parameter obtained by aligning with the consensus model. **If all particles can be aligned with its ground-truth conformation, the distribution of pose parameters for every conformation should be even and uniform (ideally). However, when all particles are aligned against a single model, the distribution of pose parameters for every conformation will be distorted accordingly!**
+Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image. 
 
 ## Spliceosome complex <a name="splice"></a>
 UMAP and some selected classes for the spliceosome complex
@@ -207,7 +207,8 @@ The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output d
 
 After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap directly.
 
-You can generate the volume corresponds to each cluster centroid using
+You can generate the volume corresponds to each cluster centroid using, 
+(you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to use case)
 
 ```
 sh eval_vol.sh ./data/ribo/ 16 16 1.77
