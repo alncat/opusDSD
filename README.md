@@ -195,12 +195,12 @@ You can use the analysis scripts in opusDSD to visualizing the learned latent sp
 The first step is to sample the latent space using kmeans algorithm. Suppose the results are in ```./data/ribo```,
 
 ```
-sh analyze.sh ./data/ribo 16 ./data/ribo/ribo_pose_euler.pkl 16
+sh analyze.sh ./data/ribo 16 2 16
 ```
 
 - The first argument after ```analyze.sh``` is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl```
 - the second argument is the epoch number you would like to analyze,
-- the third argument is the path of the pose parameter file you created before, which is used to color particles
+- the third argument is the number of PCs you would like to sample for traversal
 - the final argument is the number of clusters for kmeans clustering.
 
 The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in ./data/ribo/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in ./data/ribo/analyze.16/umap.png .
