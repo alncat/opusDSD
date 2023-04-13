@@ -231,7 +231,9 @@ def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels
         if labels is None:
             labels = range(len(centers))
         centers_an = centers[:, 0:2]+np.array([.1, .1])
-        #centers_an[10] += np.array([0.3, -0.1])
+        #centers_an[12] += np.array([-0.2, 0.1])
+        #centers_an[3] += np.array([-0.1, 0.1])
+        #centers_an[16] += np.array([-0.4, 0.1])
         #centers_an[1] += np.array([0.1, -0.2])
         #centers_an[8] += np.array([-0.3, 0.])
         for i in labels:

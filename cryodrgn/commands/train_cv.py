@@ -78,7 +78,7 @@ def add_args(parser):
     group.add_argument('--lamb', type=float, default=1.0, help='restraint strength for umap prior (default: %(default)s)')
     group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
-    group.add_argument('--bfactor', type=float, default=6., help='apply bfactor (default: %(default)s) to reconstruction')
+    group.add_argument('--bfactor', type=float, default=3., help='apply bfactor (default: %(default)s) to reconstruction')
     group.add_argument('--beta', default='cos', help='Choice of beta schedule')
     group.add_argument('--beta-control', default=1., type=float, help='restraint strength for KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
@@ -110,8 +110,8 @@ def add_args(parser):
     group = parser.add_argument_group('Decoder Network')
     group.add_argument('--dec-layers', dest='players', type=int, default=3, help='Number of hidden layers (default: %(default)s)')
     group.add_argument('--dec-dim', dest='pdim', type=int, default=256, help='Number of nodes in hidden layers (default: %(default)s)')
-    group.add_argument('--pe-type', choices=('geom_ft','geom_full','geom_lowf','geom_nohighf','linear_lowf','none', 'convwarp', 'vanilla'), default='geom_lowf', help='Type of positional encoding (default: %(default)s)')
-    group.add_argument('--template-type', choices=('conv'), help='Type of template decoding method (default: %(default)s)')
+    group.add_argument('--pe-type', choices=('geom_ft','geom_full','geom_lowf','geom_nohighf','linear_lowf','none', 'convwarp', 'vanilla'), default='vanilla', help='Type of positional encoding (default: %(default)s)')
+    group.add_argument('--template-type', choices=('conv'), default='conv', help='Type of template decoding method (default: %(default)s)')
     group.add_argument('--warp-type', choices=('blurmix', 'diffeo', 'deform'), help='Type of warp decoding method (default: %(default)s)')
     group.add_argument('--symm', help='Type of symmetry of the 3D volume (default: %(default)s)')
     group.add_argument('--num-struct', type=int, default=1, help='Num of structures (default: %(default)s)')
@@ -142,7 +142,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                                                                  trans=trans, it=it, enc=enc,
                                                                  args=args,
                                                                  euler=euler,
-                                                                 posetracker=posetracker, data=data)
+                                                                 posetracker=posetracker, data=data, snr2=snr2)
     if update_params:
         optim.zero_grad()
 
@@ -182,12 +182,12 @@ def data_augmentation(y, trans, ctf_grid, grid, window_r, downfrac=0.5):
 
         # apply b factor
         random_b = np.random.rand() - 0.5
-        b_fact = ctf_grid.get_b_factor(b=random_b*2)
+        b_fact = ctf_grid.get_b_factor(b=random_b*0.5)
         y_fft_ori = y_fft*b_fact
 
-        random_b = np.random.rand() - 0.5
-        b_fact = ctf_grid.get_b_factor(b=random_b*2)
-        y_fft *= b_fact
+        #random_b = np.random.rand() - 0.5
+        #b_fact = ctf_grid.get_b_factor(b=random_b*0.25)
+        #y_fft *= b_fact
 
         #print(y.shape, y_fft.shape)
         # window y
@@ -245,7 +245,7 @@ def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, g
 def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
               yr=None, vanilla=True, ctf_grid=None, grid=None, save_image=False,
               group_stat=None, do_scale=True, trans=None, it=None, enc=None,
-              args=None, euler=None, posetracker=None, data=None):
+              args=None, euler=None, posetracker=None, data=None, snr2=1.):
     use_tilt = yt is not None
     use_ctf = ctf_params is not None
     B = y.size(0)
@@ -325,7 +325,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         #c = torch.fft.fftshift(c, dim=-2)
         #c = utils.crop_fft(c, out_size)
         # encode images to latents
-        z, encout = model.vanilla_encode(diff, rot, trans, eulers=euler, num_gpus=args.num_gpus)
+        z, encout = model.vanilla_encode(diff, rot, trans, eulers=euler, num_gpus=args.num_gpus, snr2=snr2)
         #print(z - encout['z_mu'])
         # sample nearest neighbors
         posetracker.set_emb(encout["z_mu"], ind)
@@ -429,7 +429,9 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     else:
         top_euler = None
         if C > 1:
-            l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1) + y_recon.unsqueeze(2)**2).sum(dim=(-1, -2)).view(B, -1)
+            y_recon2 = (y_recon.unsqueeze(2)**2).sum(dim=(-1,-2)).view(B, -1)
+            l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1)).sum(dim=(-1, -2)).view(B, -1) + y_recon2
+            #l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1) + y_recon.unsqueeze(2)**2).sum(dim=(-1, -2)).view(B, -1)
             #print(y_recon.shape, y.shape, l2_diff.shape, mask_sum.shape)
             probs = F.softmax(-l2_diff.detach()*0.5, dim=-1).detach()
             #get argmax
@@ -454,8 +456,10 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
             #print(y.shape, em_l2_loss.shape, mask_sum.shape, y.pow(2).sum(dim=(-1,-2)))
             y2  = y.pow(2).sum(dim=(-1,-2)).squeeze()/mask_sum.squeeze()
             mse = em_l2_loss.detach() + y2
+            snr = (y_recon2*probs).sum(-1).squeeze()/mask_sum.squeeze()/mse
+            snr = snr.mean()
             #print(mse.shape, y2.shape)
-            snr = (1. - (mse/y2).mean())
+            #snr = (1. - (mse/y2).mean())
             em_l2_loss = em_l2_loss.mean()
             #print(em_l2_loss)
         else:
@@ -529,7 +533,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
         mmd = mmd.mean()
         #print("c_mmd: ", c_mmd, "mmd: ", mmd)
-        loss += lamb*(c_mmd + mmd + 0.25*cross_corr)*((beta+0.05)/1.05)/mask_sum
+        loss += lamb*(c_mmd + mmd)*((beta+0.05)/1.05)/mask_sum
         if "knn" in losses:
             loss += lamb*losses["knn"]*((beta+0.05)/1.05)/mask_sum
         #loss = loss/(1 + lamb*beta)
@@ -744,7 +748,7 @@ def main(args):
     # parallelize
     if args.multigpu and torch.cuda.device_count() > 1:
         if args.num_gpus is not None:
-            num_gpus = args.num_gpus
+            num_gpus = min(args.num_gpus, torch.cuda.device_count())
         else:
             num_gpus = torch.cuda.device_count()
         args.batch_size *= num_gpus
@@ -908,7 +912,7 @@ def main(args):
     # parallelize
     if args.multigpu and torch.cuda.device_count() > 1:
         if args.num_gpus is not None:
-            num_gpus = args.num_gpus
+            num_gpus = min(args.num_gpus, torch.cuda.device_count())
         else:
             num_gpus = torch.cuda.device_count()
         device_ids = [x for x in range(num_gpus)]
@@ -958,7 +962,7 @@ def main(args):
         # moving average
         ema_mu = 0.99
         gen_loss_ema, gen_loss_var_ema = 0.0, 0.
-        snr_ema = 0.0025
+        snr_ema = 0.01
         mse_ema = 0.01
         mse_var_ema = 0.1
         mmd_ema = 0.
@@ -969,7 +973,7 @@ def main(args):
         #increasing bfactor slowly
         #args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
         args.bfactor = bfactor*(1. - 0.1/(1. + 3.*math.exp(-0.25*epoch)))*10./9.
-        beta_max    = 0.98 ** (epoch)
+        beta_max    = 1. #0.98 ** (epoch)
         log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
                         lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
 
@@ -1084,7 +1088,7 @@ def main(args):
                                               save_image=save_image, group_stat=group_stat,
                                               it=batch_it, enc=None,
                                               args=args, euler=euler,
-                                              posetracker=posetracker, data=data, update_params=False)
+                                              posetracker=posetracker, data=data, update_params=False, snr2=snr_ema)
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
             # logging

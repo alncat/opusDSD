@@ -4,6 +4,7 @@ Visualize latent space and generate volumes
 
 import argparse
 import numpy as np
+import math
 import sys, os
 import pickle
 import shutil
@@ -134,10 +135,12 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
         xmin = np.min(umap_emb[:, 0])
         ymax = np.max(umap_emb[:, 1])
         ymin = np.min(umap_emb[:, 1])
-        pmax = max(xmax, ymax)
-        pmin = min(xmin, ymin)
+        interval = max(xmax-xmin, ymax-ymin)
+        interval = math.ceil(interval)
+        #interval = interval + (interval%2)
+        log(f"using interval {interval}")
         plt.figure(3)
-        g = sns.jointplot(x=umap_emb[:,0], y=umap_emb[:,1], hue=groups, palette="icefire", s=1.5, alpha=.2, xlim=(pmin, pmax), ylim=(pmin, pmax))
+        g = sns.jointplot(x=umap_emb[:,0], y=umap_emb[:,1], hue=groups, palette="icefire", s=1.5, alpha=.2, xlim=(xmin, xmin+interval), ylim=(ymin, ymin+interval))
         g.set_axis_labels('UMAP1','UMAP2')
         #plt.tight_layout()
         plt.savefig(f'{outdir}/umap.png')
@@ -166,7 +169,7 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
 
     if zdim > 2 and not skip_umap:
         analysis.scatter_annotate(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True,
-                                  xlim=(pmin, pmax), ylim=(pmin, pmax),
+                                  xlim=(xmin, xmin+interval), ylim=(ymin, ymin+interval),
                                   alpha=.1, s=.5)
         plt.xlabel('UMAP1', fontsize=14, weight='bold')
         plt.ylabel('UMAP2', fontsize=14, weight='bold')

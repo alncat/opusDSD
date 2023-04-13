@@ -66,7 +66,7 @@ class HetOnlyVAE(nn.Module):
             in_vol_min = min(in_vol_maxs.min(), in_vol_mins.min())
             mask_frac = (ref_vol.shape[-1] - in_vol_min*2 + 4) / ref_vol.shape[-1]
             log("model: masking volume using fraction: {}".format(mask_frac))
-            self.window_r = min(mask_frac, 0.95)
+            self.window_r = min(mask_frac, 0.85)
             if templateres == 256:
                 self.window_r = min(self.window_r, 0.85)
         else:
@@ -204,7 +204,7 @@ class HetOnlyVAE(nn.Module):
     def get_fixedcode(self):
         return self.encoder()
 
-    def vanilla_encode(self, img, rots=None, trans=None, eulers=None, num_gpus=4):
+    def vanilla_encode(self, img, rots=None, trans=None, eulers=None, num_gpus=4, snr2=1.):
         if self.encode_mode == 'fixed':
             z = self.encoder()
             z = z.repeat(num_gpus, 1)
@@ -217,7 +217,9 @@ class HetOnlyVAE(nn.Module):
             encout = {"encoding": zs[1:, :]}
             #print(z.shape, encout['encoding'].shape)
         elif self.encode_mode == "grad":
-            encout = self.encoder(img, rots, trans, losslist=["kldiv"], eulers=eulers)
+            snr = np.sqrt(np.abs(snr2))
+            #print(snr)
+            encout = self.encoder(img, rots, trans, losslist=["kldiv"], eulers=eulers, snr=snr)
             mu     = encout["z_mu"]
             logstd = encout["z_logstd"]
             z      = encout["z"]
@@ -295,8 +297,8 @@ class HetOnlyVAE(nn.Module):
         images = decout["y_recon"]
         rnd_factor = torch.rand([images.shape[0], 1, 1, 1], device=images.device)*0.2
         decout["y_recon_mean"] = images.detach().mean(dim=1, keepdim=True)
-        decout["y_ref"] -= decout["y_recon_mean"]*rnd_factor
-        decout["y_ref"] /= (1. - rnd_factor)
+        #decout["y_ref"] -= decout["y_recon_mean"]*rnd_factor
+        #decout["y_ref"] /= (1. - rnd_factor)
 
         return decout
 
@@ -510,6 +512,7 @@ class Encoder(nn.Module):
             in_mask = self.transformer_e.crop(in_mask, crop_mask_size).unsqueeze(0).unsqueeze(0)
             # downsample
             in_mask = self.transformer_e.sample(in_mask)
+            log("encoder: downsampling mask from {} to {}".format(crop_mask_size, in_mask.shape))
             self.register_buffer("in_mask", in_mask)
             self.use_mask = True
         else:
@@ -537,7 +540,7 @@ class Encoder(nn.Module):
                 downsample1.append(nn.LeakyReLU(0.2))
             inchannels = outchannels
             #if inchannels == outchannels:
-            outchannels = min(inchannels * 2, 512)
+            outchannels = min(inchannels * 2, 1024)
             #else:
         self.out_channels = inchannels
         #downsample.append(nn.Conv3d(inchannels, self.out_channels, 4, 2, 1))
@@ -584,7 +587,7 @@ class Encoder(nn.Module):
         #print(neighbor_eulers.shape, neighbor_eulers_flatten.shape)
         return neighbor_eulers_flatten
 
-    def forward(self, x, rots, trans, losslist=[], eulers=None):
+    def forward(self, x, rots, trans, losslist=[], eulers=None, snr=1.):
         #2d to 3d suppose x is (N, 1, H, W)
         B = x.shape[0]
         #x = self.init_conv(x).unsqueeze(2)
@@ -593,7 +596,7 @@ class Encoder(nn.Module):
         #x = x*(0.75 + 0.5*torch.rand((B, 1, 1, 1, 1)).float().to(x.get_device())) \
         #    + 0.1*torch.randn((B, 1, 1, 1, 1)).to(x.get_device())
 
-        pixrad = hp.max_pixrad(32)
+        pixrad = hp.max_pixrad(128)
         #x3d = x.repeat(1, 1, self.crop_vol_size, 1, 1) #(N, D, H, W)
         encs = []
         x3d_downs = []
@@ -605,16 +608,16 @@ class Encoder(nn.Module):
             #rot = lie_tools.euler_to_SO3(sample_euler_i)#euler_i[...,:2])#.unsqueeze(1).unsqueeze(1) #(B, 1, 1, 3, 3)
             # convert to hopf
             #hopf = lie_tools.euler_to_hopf(euler_i)
-            o_rot = lie_tools.hopf_to_SO3(euler01)
+            rot = lie_tools.hopf_to_SO3(euler01)
 
             # perturb z axis
-            rand_z = lie_tools.random_direction(1, pixrad*180/np.pi).to(o_rot.get_device())
-            rand_z = torch.transpose(o_rot, -2, -1) @ rand_z.unsqueeze(-1)
-            rand_z = rand_z.squeeze(-1)
-            # to radian
-            rand_e = lie_tools.direction_to_hopf(rand_z)
-            #new rotation
-            rot = lie_tools.hopf_to_SO3(rand_e.squeeze(0))
+            #rand_z = lie_tools.random_direction(1, pixrad*180/np.pi).to(o_rot.get_device())
+            #rand_z = torch.transpose(o_rot, -2, -1) @ rand_z.unsqueeze(-1)
+            #rand_z = rand_z.squeeze(-1)
+            ## to radian
+            #rand_e = lie_tools.direction_to_hopf(rand_z)
+            ##new rotation
+            #rot = lie_tools.hopf_to_SO3(rand_e.squeeze(0))
 
             #print(rand_e-euler01, torch.acos((torch.diag(o_rot.T @ rot).sum() - 1)/2)*180/np.pi)
             # minus z hopf angle == z euler angle
@@ -630,8 +633,8 @@ class Encoder(nn.Module):
             x3d_center.append(x_i.squeeze(1))#*mask_2d)
 
             if self.training:
-                x_i = x_i*(0.75 + 0.5*torch.rand(1).float().to(x.get_device())) \
-                + 0.2*torch.randn(1).to(x.get_device()) #+ 0.05*torch.rand_like(x_i)
+                x_i = x_i*(1. + 0.3*snr*(torch.rand(1).float().to(x.get_device()) - 0.5)) \
+                + 0.2*snr*torch.randn(1).to(x.get_device()) #+ 0.05*torch.rand_like(x_i)
 
             pos = self.transformer_e.rotate(rot.T) # + 1)/2*(self.crop_vol_size - 1) #(B, 1, H, W, D, 3) x ( B, 1, 1, 3, 3) -> (B, 1, H, W, D, 3)
 

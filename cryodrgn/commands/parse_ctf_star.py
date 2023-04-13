@@ -19,7 +19,7 @@ def add_args(parser):
     parser.add_argument('-D', type=int, required=True, help='Image size in pixels')
     parser.add_argument('--relion31', action='store_true', help='Flag for relion3.1 star format')
     parser.add_argument('-o', type=os.path.abspath, required=True, help='Output pkl of CTF parameters')
-    parser.add_argument('-o-g', type=os.path.abspath, required=True, help='Output pkl of group assignments')
+    parser.add_argument('-o-g', type=os.path.abspath, help='Output pkl of group assignments')
     parser.add_argument('--png', metavar='PNG', type=os.path.abspath, help='Optionally plot the CTF')
 
     group = parser.add_argument_group('Overwrite CTF parameters')
@@ -32,7 +32,7 @@ def add_args(parser):
 def main(args):
     assert args.star.endswith('.star'), "Input file must be .star file"
     assert args.o.endswith('.pkl'), "Output CTF parameters must be .pkl file"
-    assert args.o_g.endswith('.pkl'), "Output group assignment must be .pkl file"
+    #assert args.o_g.endswith('.pkl'), "Output group assignment must be .pkl file"
     if args.relion31: # TODO: parse the data_optics block
         assert args.kv is not None, "--kv must be set manually with RELION 3.1 file format"
         assert args.cs is not None, "--cs must be set manually with RELION 3.1 file format"
@@ -119,9 +119,9 @@ def main(args):
     log('Saving {}'.format(args.o))
     with open(args.o,'wb') as f:
         pickle.dump(ctf_params.astype(np.float32), f)
-    log('Saving {}'.format(args.o_g))
-    with open(args.o_g, 'wb') as f:
-        pickle.dump(particle_groups.astype(np.int64), f)
+    #log('Saving {}'.format(args.o_g))
+    #with open(args.o_g, 'wb') as f:
+    #    pickle.dump(particle_groups.astype(np.int64), f)
     if args.png:
         import matplotlib.pyplot as plt
         assert args.D, 'Need image size to plot CTF'

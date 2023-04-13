@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from . import fft
 from . import utils
 log = utils.log
 
@@ -94,8 +95,10 @@ def plot_ctf(D,Apix,ctf_params):
     import seaborn as sns
     freqs = np.stack(np.meshgrid(np.linspace(-.5,.5,D,endpoint=False),np.linspace(-.5,.5,D,endpoint=False)),-1)/Apix
     freqs = freqs.reshape(-1,2)
-    c = compute_ctf_np(freqs, *ctf_params)
-    sns.heatmap(c.reshape(D, D))
+    c = compute_ctf_np(freqs, *ctf_params).reshape(D,D)
+    c = fft.ifftn_center(c)
+    print(c.mean())
+    sns.heatmap(c.real)
 
 def load_ctf_for_training(D, ctf_params_pkl):
     assert D%2 == 0
