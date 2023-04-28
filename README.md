@@ -104,7 +104,7 @@ suppose the run_data.star is located at ```/work/``` directory, where
 | -D | the dimension of your dataset|
 | --Apix | is the angstrom per pixel of you dataset|
 | -o | followed by the filename of pose parameter used by our program|
-| --relion31 | always add this argument if you are using star file from relion with version higher than 3.0|
+| --relion31 | include this argument if you are using star file from relion with version higher than 3.0|
 
 Next, you can prepare the ctf parameter file by executing:
 
@@ -116,16 +116,9 @@ python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.3
 | -o-g | used to specify the filename of ctf groups of your dataset|
 | --ps |  used to specify the amount of phaseshift in the dataset|
 
+For star file from relion with version hgiher than 3.0, you should specify more --relion31 and more arguments!
+
 Checkout ```prepare.sh``` which combine both commands to save your typing.
-
-Thirdly, you should put the path of image stack in a txt file, e.g.,
-
-a file named 'hrd.txt' which contains
-
-```
-/work/hrd.mrcs
-```
-Opus-DSD will read image stacks from the specified path.
 
 Finally, you should create a mask using the consensus model and RELION as in the traditional postprocess. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
@@ -137,8 +130,10 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --split hrd-split.pkl --bfactor 6.
+python -m cryodrgn.commands.train_cv /work/hrd.mrcs --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 18 --zdim 8 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --split hrd-split.pkl --bfactor 4. --templateres 192
 ```
+The second argument after train_cv specified the path of image stack.
+The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is enabled! The default values are setting to them in our program, you can ommit them incase of simplicity. 
 
 The meaning of each argument is explained as follows:
 | argument |  explanation |
@@ -152,7 +147,7 @@ The meaning of each argument is explained as follows:
 | --num-gpus | the number of gpus used for training, note that the total number of images in the total batch will be n*num-gpus |
 | --multigpu |toggle on the data parallel version |
 | --beta-control |the restraint strength of the beta-vae prior, the larger the argument, the stronger the restraint. The scale of beta-control should be propotional to the SNR of dataset. Suitable beta-control might help disentanglement by increasing the magnitude of latent encodings and the sparsity of latent encodings, for more details, check out [beta vae paper](https://openreview.net/forum?id=Sy2fzU9gl). In our implementation, we adjust the scale of beta-control automatically based on SNR estimation, possible ranges of this argument are [0.5-4.]. You can use larger beta-control for dataset with higher SNR|
-| --beta |the schedule for restraint stengths, ```cos``` implements the [cyclic annealing schedule](https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/) |
+| --beta |the schedule for restraint stengths, ```cos``` implements the [cyclic annealing schedule](https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/) and is the default option|
 | -o | the directory name for storing results, such as model weights, latent encodings |
 | -r | the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
 | --downfrac | the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D\*downfrac. You can set it according to resolution of consensus model. We only support D\*downfrac >= 128 so far (I may fix this behavior later) |
@@ -178,7 +173,7 @@ Happy Training! Contact us if you run into any troubles, since we may miss certa
 To restart execution from a checkpoint, you can use
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad -b 18 --zdim 8 --lr 1.e-4 --template-type conv --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 18 --zdim 8 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
 ```
 | argument |  explanation |
 | --- | --- |
@@ -207,7 +202,7 @@ The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output d
 
 After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap directly.
 
-You can generate the volume corresponds to each cluster centroid using, 
+You can generate the volume which corresponds to each cluster centroid or traverses the principal component using, 
 (you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to use case)
 
 ```
