@@ -499,7 +499,8 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     else:
         #loss = gen_loss + 1e-4*beta_control*beta*kld/mask_sum.float() + beta_control*beta*1e-5*torch.mean(losses['tvl2'] + 1e-1*losses['l2'])
         #alpha = 0.005*beta #0.01*beta
-        lamb = args.lamb #.5 #10 1 0.02
+        lamb = args.lamb*(1. - torch.exp(-(snr.detach()/0.01)**2)) #.5 #10 1 0.02
+        #print(lamb)
         eps = 1e-3
         kld, mu2 = utils.compute_kld(z_mu, z_logstd)
         cross_corr = utils.compute_cross_corr(z_mu)
