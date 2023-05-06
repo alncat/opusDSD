@@ -80,7 +80,7 @@ def add_args(parser):
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
     group.add_argument('--bfactor', type=float, default=3., help='apply bfactor (default: %(default)s) to reconstruction')
     group.add_argument('--beta', default='cos', help='Choice of beta schedule')
-    group.add_argument('--beta-control', default=1., type=float, help='restraint strength for KL target. (default: %(default)s)')
+    group.add_argument('--beta-control', default=0.75, type=float, help='restraint strength for KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
     group.add_argument('--tmp-prefix', type=str, default='tmp', help='prefix for naming intermediate reconstructions')
     group.add_argument('--amp', action='store_true', help='Use mixed-precision training')
