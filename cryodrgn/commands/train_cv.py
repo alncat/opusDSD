@@ -61,7 +61,7 @@ def add_args(parser):
     group.add_argument('--window-r', type=float, default=.85,  help='Windowing radius (default: %(default)s)')
     group.add_argument('--datadir', type=os.path.abspath, help='Path prefix to particle stack if loading relative paths from a .star or .cs file')
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
-    group.add_argument('--lazy-single', action='store_true', help='Lazy loading if full dataset is too large to fit in memory')
+    group.add_argument('--lazy-single', default=True, action='store_true', help='Lazy loading if full dataset is too large to fit in memory')
     group.add_argument('--lazy', action='store_true', help='Memory efficient training by loading data in chunks')
     group.add_argument('--preprocessed', action='store_true', help='Skip preprocessing steps if input data is from cryodrgn preprocess_mrcs')
     group.add_argument('--max-threads', type=int, default=16, help='Maximum number of CPU cores for FFT parallelization (default: %(default)s)')
@@ -749,7 +749,8 @@ def main(args):
     # parallelize
     if args.multigpu and torch.cuda.device_count() > 1:
         if args.num_gpus is not None:
-            num_gpus = min(args.num_gpus, torch.cuda.device_count())
+            args.num_gpus = min(args.num_gpus, torch.cuda.device_count())
+            num_gpus = args.num_gpus
         else:
             num_gpus = torch.cuda.device_count()
         args.batch_size *= num_gpus
@@ -947,6 +948,7 @@ def main(args):
     # learning rate scheduler
     # training loop
     # data_generator = DataLoader(data, batch_size=args.batch_size, shuffle=True)
+    args.log_interval = args.batch_size*30
     num_epochs = args.num_epochs
 
     vanilla = args.pe_type == "vanilla"
