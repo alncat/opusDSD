@@ -60,7 +60,7 @@ Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The par
 
 ## Spliceosome complex <a name="splice"></a>
 UMAP and some selected classes for the spliceosome complex
-<img width="1160" alt="image" src="https://user-images.githubusercontent.com/3967300/221396692-fd464206-ce05-47fc-a402-91ce122d34c8.png">
+<img width="1147" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/38bd6b99-f9f6-4cf9-b6d5-a22029d012d8">
 
 The movie of the movement in spliceosome along PC1
 
