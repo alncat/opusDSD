@@ -54,9 +54,9 @@ Comparison between some states:
 
 A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like **fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)**
 
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.jpg?raw=true "80S ribosome color UMAP")
 
-Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image. 
+Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image.
 
 ## Spliceosome complex <a name="splice"></a>
 UMAP and some selected classes for the spliceosome complex
@@ -130,10 +130,10 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
-python -m cryodrgn.commands.train_cv /work/hrd.mrcs --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 18 --zdim 8 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --split hrd-split.pkl --bfactor 4. --templateres 192
+python -m cryodrgn.commands.train_cv /work/hrd.mrcs --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 18 --zdim 8 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --split hrd-split.pkl --bfactor 4. --templateres 192
 ```
 The second argument after train_cv specified the path of image stack.
-The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is enabled! The default values are setting to them in our program, you can ommit them incase of simplicity. 
+The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is enabled! The default values are setting to them in our program, you can ommit them incase of simplicity.
 
 The meaning of each argument is explained as follows:
 | argument |  explanation |
@@ -152,7 +152,6 @@ The meaning of each argument is explained as follows:
 | -r | the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
 | --downfrac | the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D\*downfrac. You can set it according to resolution of consensus model. We only support D\*downfrac >= 128 so far (I may fix this behavior later) |
 | --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider halving it. Possible ranges are [0.1, 1.5]|
-| --log-interval | the logging interval, the program will output some statistics after the specified steps, set is to multiples of num-gpus\*b |
 | --split | the filename for storing the train-validation split of image stack |
 | --valfrac | the fraction of images in the validation set, default is 0.1 |
 | --bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate, possible ranges are [3, 8]. We will decay the bfactor every epoch. This is equivalent to learning rate warming up. |
@@ -173,7 +172,7 @@ Happy Training! Contact us if you run into any troubles, since we may miss certa
 To restart execution from a checkpoint, you can use
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 18 --zdim 8 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --log-interval 1800 --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
+python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 18 --zdim 8 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
 ```
 | argument |  explanation |
 | --- | --- |
@@ -202,22 +201,31 @@ The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output d
 
 After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap directly.
 
-You can generate the volume which corresponds to each cluster centroid or traverses the principal component using, 
+You can generate the volume which corresponds to each cluster centroid or traverses the principal component using,
 (you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to use case)
 
 ```
-sh eval_vol.sh ./data/ribo/ 16 16 1.77
+sh eval_vol.sh ./data/ribo/ 16 16 1.77 kmeans
 ```
 
 - The first argument after eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
 - the second argument is the epoch number you just analyzed
 - the third argument is the number of kmeans clusters (or principal component) you used in analysis
 - the fourth argument is the apix of the generated volumes, you can specify a target value
+- the last argument specifies wether generating volumes for kmeans clusters or principal components, use ```kmeans``` for kmeans clustering, or ```pc``` for principal components
 
 change to directory ```./data/ribo/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
 correspond to the cluster centroids.
 
-Finally, you can also retrieve the star files for images in each cluster using
+You can use
+
+```
+sh eval_vol.sh ./data/ribo/ 16 1 1.77 pc
+```
+
+to generate volumes along pc1. You can check volumes in ```./data/ribo/analyze.16/pc1```. You can make a movie using chimerax's vseries feature.
+
+Finally, you can also retrieve the star files for images in each kmeans cluster using
 
 ```
 sh parse_pose.sh run_data.star 1.77 240 ./data/ribo/ 16 16
