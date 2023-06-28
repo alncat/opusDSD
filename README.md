@@ -54,7 +54,7 @@ Comparison between some states:
 
 A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like **fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)**
 
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.jpg?raw=true "80S ribosome color UMAP")
+![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
 Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image.
 
