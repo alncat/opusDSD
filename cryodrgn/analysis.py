@@ -211,14 +211,12 @@ def _get_colors(K, cmap=None):
         colors = [colors[i%len(colors)] for i in range(K)]
     return colors
 
-def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels=None, alpha=.1, s=1, xlim=None, ylim=None):
+def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels=None, alpha=.1, s=1, xlim=None, ylim=None, plot_scatter=False):
     fig, ax = plt.subplots()
-    plt.scatter(x, y, alpha=alpha, s=s, rasterized=True)
-    if xlim is not None:
-        plt.xlim(xlim[0], xlim[1])
-    if ylim is not None:
-        plt.ylim(ylim[0], ylim[1])
-    plt.gca().set_aspect('equal')
+    if plot_scatter:
+        plt.scatter(x, y, alpha=alpha, s=s, rasterized=True,)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
 
     # plot cluster centers
     if centers_ind is not None:
@@ -226,13 +224,20 @@ def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels
         centers = np.array([[x[i],y[i]] for i in centers_ind])
     if centers is not None:
         plt.scatter(centers[:,0], centers[:,1], c='k')
+
+    if xlim is not None:
+        plt.xlim(xlim[0], xlim[1])
+    if ylim is not None:
+        plt.ylim(ylim[0], ylim[1])
+    plt.gca().set_aspect('equal')
+
     if annotate:
         assert centers is not None
         if labels is None:
             labels = range(len(centers))
         centers_an = centers[:, 0:2]+np.array([.1, .1])
-        #centers_an[12] += np.array([-0.2, 0.1])
-        #centers_an[3] += np.array([-0.1, 0.1])
+        #centers_an[12] += np.array([-0.3, 0.15])
+        #centers_an[3] += np.array([-0.2, 0.1])
         #centers_an[16] += np.array([-0.4, 0.1])
         #centers_an[1] += np.array([0.1, -0.2])
         #centers_an[8] += np.array([-0.3, 0.])

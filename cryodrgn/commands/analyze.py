@@ -85,7 +85,7 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
     log('K-means clustering...')
     K = num_ksamples
     kmeans_labels, centers = analysis.cluster_kmeans(z, K)
-    centers, centers_ind = analysis.get_nearest_point(z, centers)
+    _, centers_ind = analysis.get_nearest_point(z, centers)
     if not os.path.exists(f'{outdir}/kmeans{K}'):
         os.mkdir(f'{outdir}/kmeans{K}')
     utils.save_pkl(kmeans_labels, f'{outdir}/kmeans{K}/labels.pkl')
@@ -168,17 +168,28 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
     plt.savefig(f'{outdir}/kmeans{K}/z_pca_hex.png')
 
     if zdim > 2 and not skip_umap:
+        fig, ax = plt.subplots()
+        ax.scatter(umap_emb[:, 0], umap_emb[:, 1], alpha=.1, s=.5, rasterized=True,)
+        ax.set_xlim(xmin, xmin+interval)
+        ax.set_ylim(ymin, ymin+interval)
+        plt.gca().set_aspect('equal')
+        ax.axis('off')
+        plt.savefig(f'{outdir}/kmeans{K}/scatter.png', dpi=180)
+
         analysis.scatter_annotate(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True,
                                   xlim=(xmin, xmin+interval), ylim=(ymin, ymin+interval),
                                   alpha=.1, s=.5)
         plt.xlabel('UMAP1', fontsize=14, weight='bold')
         plt.ylabel('UMAP2', fontsize=14, weight='bold')
-        plt.savefig(f'{outdir}/kmeans{K}/umap.png')
+        plt.savefig(f'{outdir}/kmeans{K}/centers.svg')
 
-        g = analysis.scatter_annotate_hex(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True)
-        g.set_axis_labels('UMAP1','UMAP2')
+        g, _ = analysis.scatter_annotate(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True,
+                                      xlim=(xmin, xmin+interval), ylim=(ymin, ymin+interval),
+                                      alpha=.1, s=.5, plot_scatter=True)
+        plt.xlabel('UMAP1')
+        plt.ylabel('UMAP2')
         #plt.tight_layout()
-        plt.savefig(f'{outdir}/kmeans{K}/umap_hex.png')
+        plt.savefig(f'{outdir}/kmeans{K}/umap.png')
 
     for i in range(num_pcs):
         if zdim > 2 and not skip_umap:

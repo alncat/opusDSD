@@ -80,7 +80,7 @@ def add_args(parser):
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
     group.add_argument('--bfactor', type=float, default=3., help='apply bfactor (default: %(default)s) to reconstruction')
     group.add_argument('--beta', default='cos', help='Choice of beta schedule')
-    group.add_argument('--beta-control', default=0.75, type=float, help='restraint strength for KL target. (default: %(default)s)')
+    group.add_argument('--beta-control', default=1., type=float, help='restraint strength for KL target. (default: %(default)s)')
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
     group.add_argument('--tmp-prefix', type=str, default='tmp', help='prefix for naming intermediate reconstructions')
     group.add_argument('--amp', action='store_true', help='Use mixed-precision training')
@@ -199,13 +199,14 @@ def data_augmentation(y, trans, ctf_grid, grid, window_r, downfrac=0.5):
         #y_fft = utils.mask_image_fft(y, mask, ctf_grid)
 
         down_size = (int(y.shape[-1]*downfrac)//2)*2
+        down_scale = down_size/y.shape[-1]
         y_fft_s = torch.fft.fftshift(y_fft, dim=(-2))
-        y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
+        y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_scale)**2
         y_fft = torch.fft.ifftshift(y_fft_crop, dim=(-2))
         y = fft.torch_ifft2_center(y_fft)
 
         y_fft_s = torch.fft.fftshift(y_fft_ori, dim=(-2))
-        y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_size/y.shape[-1])**2
+        y_fft_crop = utils.crop_fft(y_fft_s, down_size)*(down_scale)**2
         y_fft_ori = torch.fft.ifftshift(y_fft_crop, dim=(-2))
 
         #y_rand = ctf_grid.sample_local_translation(y_fft, 1, 1.)
@@ -422,7 +423,9 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     use_tilt = yt is not None
     B = y.size(0)
     C = y_recon.size(1)
+    W = y_recon.size(-1)
     mask_sum = mask_sum.float()
+    mask_sum = torch.maximum(mask_sum, torch.ones_like(mask_sum)*W**2*np.pi*0.125)
     #print(mask_sum)
     if not vanilla:
         gen_loss = F.mse_loss(y_recon, y.view(B,-1)[:, mask])
@@ -546,7 +549,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
             #print(logvar_diff.mean().detach(), z_mu_diff2.mean().detach(), var_diff.mean().detach())
             plt.show()
 
-    return loss, gen_loss, snr, mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler, mse.mean()
+    return loss, gen_loss, snr, mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler, y2.mean()
 
 def eval_z(model, lattice, data, batch_size, device, trans=None, use_tilt=False, ctf_params=None, use_real=False):
     assert not model.training
@@ -750,7 +753,7 @@ def main(args):
     if args.multigpu and torch.cuda.device_count() > 1:
         if args.num_gpus is not None:
             args.num_gpus = min(args.num_gpus, torch.cuda.device_count())
-            num_gpus = args.num_gpus
+            num_gpus = min(args.num_gpus, torch.cuda.device_count())
         else:
             num_gpus = torch.cuda.device_count()
         args.batch_size *= num_gpus
@@ -975,7 +978,7 @@ def main(args):
         beta_control = args.beta_control
         #increasing bfactor slowly
         #args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
-        #args.bfactor = bfactor*(1. - 0.1/(1. + 3.*math.exp(-0.25*epoch)))*10./9.
+        args.bfactor = bfactor*(1. - 0.1/(1. + 3.*math.exp(-0.25*epoch)))*10./9.
         beta_max    = 1. #0.98 ** (epoch)
         log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
                         lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
@@ -1129,16 +1132,16 @@ def main(args):
         #update learning rate
         lr_scheduler.step()
     # save model weights, latent encoding, and evaluate the model on 3D lattice
-    out_weights = '{}/weights.pkl'.format(args.outdir)
-    out_z = '{}/z.pkl'.format(args.outdir)
-    model.eval()
-    with torch.no_grad():
-        if not vanilla:
-            z_mu, z_logvar = eval_z(model, lattice, data, args.batch_size, device, posetracker.trans, tilt is not None, ctf_params, args.use_real)
-        else:
-            z_mu = None
-            z_logvar = None
-        save_checkpoint(model, optim, posetracker, pose_optimizer, epoch, z_mu, z_logvar, out_weights, out_z, vanilla=vanilla)
+    #out_weights = '{}/weights.pkl'.format(args.outdir)
+    #out_z = '{}/z.pkl'.format(args.outdir)
+    #model.eval()
+    #with torch.no_grad():
+    #    if not vanilla:
+    #        z_mu, z_logvar = eval_z(model, lattice, data, args.batch_size, device, posetracker.trans, tilt is not None, ctf_params, args.use_real)
+    #    else:
+    #        z_mu = None
+    #        z_logvar = None
+    #    save_checkpoint(model, optim, posetracker, pose_optimizer, epoch, z_mu, z_logvar, out_weights, out_z, vanilla=vanilla)
 
     if args.do_pose_sgd and epoch >= args.pretrain:
         out_pose = '{}/pose.pkl'.format(args.outdir)
