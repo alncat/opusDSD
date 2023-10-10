@@ -16,7 +16,12 @@ https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-a
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. A newer version with better reconstruction quality is available upon request.
+Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. A newer version with better reconstruction quality is available upon request. An exemplar movie of the new version is shown below:
+
+
+https://github.com/alncat/opusDSD/assets/3967300/810e85cc-445f-4e8c-bfde-e78fe87ec443
+
+
 This program is built upon a set of great works:
 - [cryoDRGN](https://github.com/zhonge/cryodrgn)
 - [Neural Volumes](https://stephenlombardi.github.io/projects/neuralvolumes/)
