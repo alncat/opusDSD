@@ -16,7 +16,7 @@ https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-a
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The manuscript of this method is available at https://www.biorxiv.org/content/10.1101/2022.11.22.517601v1.
+Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. A newer version with better reconstruction quality is available upon request.
 This program is built upon a set of great works:
 - [cryoDRGN](https://github.com/zhonge/cryodrgn)
 - [Neural Volumes](https://stephenlombardi.github.io/projects/neuralvolumes/)
@@ -35,7 +35,7 @@ The architecture of encoder is (Encoder class in cryodrgn/models.py):
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/encoder.png?raw=true "Opus-DSD encoder")
 
 
-The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In this version, the default size of output volume is set to 192^3, I downsampled the intermediate activations to save some gpu memories. You can tune it as you wish, happy hacking!):
+The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In this version, the default size of output volume is set to 192^3, I downsampled the intermediate activations to save some gpu memories. You can tune it as you wish, happy training!):
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
@@ -101,7 +101,7 @@ python -m cryodrgn.commands.parse_pose_star /work/run_data.star -D 192 --Apix 1.
 suppose the run_data.star is located at ```/work/``` directory, where
 | argument | explanation|
 | --- | --- |
-| -D | the dimension of your dataset|
+| -D | the dimension of the particle image in your dataset|
 | --Apix | is the angstrom per pixel of you dataset|
 | -o | followed by the filename of pose parameter used by our program|
 | --relion31 | include this argument if you are using star file from relion with version higher than 3.0|
@@ -127,7 +127,7 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 
 # training <a name="training"></a>
 
-With the pkls available, you can then train the vae for structural disentanglement proposed in DSD using
+When the pkls are available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
 python -m cryodrgn.commands.train_cv /work/hrd.mrcs --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 18 --zdim 8 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --split hrd-split.pkl --bfactor 4. --templateres 192
@@ -151,11 +151,11 @@ The meaning of each argument is explained as follows:
 | -o | the directory name for storing results, such as model weights, latent encodings |
 | -r | the solvent mask created from consensus model, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
 | --downfrac | the downsampling fraction of image, the reconstruction loss will be computed using the downsampled image of size D\*downfrac. You can set it according to resolution of consensus model. We only support D\*downfrac >= 128 so far (I may fix this behavior later) |
-| --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider halving it. Possible ranges are [0.1, 1.5]|
+| --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can safely set it to 1., for dataset with lower SNR, consider lowering it. Possible ranges are [0.2, 2.]|
 | --split | the filename for storing the train-validation split of image stack |
 | --valfrac | the fraction of images in the validation set, default is 0.1 |
-| --bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate, possible ranges are [3, 8]. We will decay the bfactor every epoch. This is equivalent to learning rate warming up. |
-| --templateres | the size of output volume of our convolutional network, it will be further resampled by spatial transformer before projecting to 2D images. The default value is 192. You can tweak it to other resolutions, larger resolutions can generate smoother density maps when downsampled from the output volume |
+| --bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate, possible ranges are [3, 8]. Consider using higher values for more dynamic structures. We will decay the bfactor every epoch. This is equivalent to learning rate warming up. |
+| --templateres | the size of output volume of our convolutional network, it will be further resampled by spatial transformer before projecting to 2D images. The default value is 192. You can tweak it to other resolutions, larger resolutions can generate sharper density maps |
 | --plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will display the 2D reconstructions and experimental images after 8 times logging intervals |
 | --tmp-prefix | the prefix of intermediate reconstructions, default is ```tmp``` |
 
