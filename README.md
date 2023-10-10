@@ -104,7 +104,7 @@ The inference pipeline of our program can run on any GPU which supports cuda 10.
 This program is developed based on cryoDRGN and adheres to a similar data preparation process. 
 
 **Data Preparation Guidelines:**
-1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format.
+1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. A good dataset for tutorial is the splicesome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
    
 2. **Consensus Refinement Result:** The program requires a consensus refinement result, which should not apply any symmetry and must be stored as a Relion STAR file. Other 3D reconstruction results such as 3D classification, as long as they determine the pose parameters of images, can also be supplied as input.
 
