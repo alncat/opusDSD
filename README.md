@@ -28,7 +28,12 @@ This program is built upon a set of great works:
 - [UMAP](https://umap-learn.readthedocs.io/en/latest/)
 - [Healpy](https://healpy.readthedocs.io/en/latest/)
 
-It aims to answer the question that how can we learn a latent space encoding 3D structural information using only 2D image supervisions! Such an informative latent space should make data analysis much easier! **Our method actually works by exploiting the unavoidable pose assignment errors brought by consensus refinement while reducing the impact of pose assignment errors on the quality of 3D reconstructions! (sounds contradictary but it works!)**
+
+This project seeks to unravel how a latent space, encoding 3D structural information, can be learned utilizing only 2D image supervisions which are aligned against a consensus reference model.
+
+An informative latent space is pivotal as it simplifies data analysis by providing a structured and reduced-dimensional representation of the data.
+
+Our approach strategically **leverages the inevitable pose assignment errors introduced during consensus refinement, while concurrently mitigating their impact on the quality of 3D reconstructions**. Although it might seem paradoxical to exploit errors while minimizing their effects, our method has proven effective in achieving this delicate balance.
 
 The workflow of this method is demonstrated as follows:
 
@@ -86,7 +91,7 @@ or using the environment.yml file in the folder by executing
 conda env create --name dsd -f environment.yml
 ```
 
-After the environment is sucessfully created, you can then activate it and using it to execute our program.
+After the environment is sucessfully created, you can then activate it and execute our program within this environement.
 
 ```
 conda activate dsd
@@ -96,14 +101,22 @@ The inference pipeline of our program can run on any GPU which supports cuda 10.
 
 # prepare data <a name="preparation"></a>
 
-The program is implemented on the basis of cryoDRGN. The data preparation process is very similar to it. First of all, the cryo-EM dataset should be stored as a mrcs stack file. Secondly, it requires a consensus refinement result without applying any symmetry which is stored as a relion star file (or any other results such as 3D classification which determine the pose parameters of images). Suppose the refinement result is stored in ```run_data.star``` and the format of relion star file is not above relion3.0 .
+This program is developed based on cryoDRGN and adheres to a similar data preparation process. 
 
+**Data Preparation Guidelines:**
+1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format.
+   
+2. **Consensus Refinement Result:** The program requires a consensus refinement result, which should not apply any symmetry and must be stored as a Relion STAR file. Other 3D reconstruction results such as 3D classification, as long as they determine the pose parameters of images, can also be supplied as input.
+
+**Usage Example:**
+Assuming the refinement result is stored as `run_data.star` and the format of the Relion STAR file is below version 3.0, 
 You can then prepare the pose parameter file by executing the below command inside the opus-dsd folder:
 
 ```
 python -m cryodrgn.commands.parse_pose_star /work/run_data.star -D 192 --Apix 1.35 -o hrd-pose-euler.pkl
 ```
 suppose the run_data.star is located at ```/work/``` directory, where
+
 | argument | explanation|
 | --- | --- |
 | -D | the dimension of the particle image in your dataset|
@@ -121,13 +134,13 @@ python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.3
 | -o-g | used to specify the filename of ctf groups of your dataset|
 | --ps |  used to specify the amount of phaseshift in the dataset|
 
-For star file from relion with version hgiher than 3.0, you should specify more --relion31 and more arguments!
+For star file from relion with version hgiher than 3.0, you should add --relion31 and more arguments to the command line!
 
 Checkout ```prepare.sh``` which combine both commands to save your typing.
 
-Finally, you should create a mask using the consensus model and RELION as in the traditional postprocess. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+Finally, you should create a mask using the consensus model and RELION as in the ```postprocess```. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
-After executing all these steps, you have three pkls for running opus-DSD in the program directory ( You can specify other directories in the command arguments ).
+After executing all these steps, you have three pkls for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
 
 
 # training <a name="training"></a>
@@ -140,7 +153,7 @@ python -m cryodrgn.commands.train_cv /work/hrd.mrcs --ctf ./hrd-ctf.pkl --poses 
 The second argument after train_cv specified the path of image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is enabled! The default values are setting to them in our program, you can ommit them incase of simplicity.
 
-The meaning of each argument is explained as follows:
+The function of each argument is explained as follows:
 | argument |  explanation |
 | --- | --- |
 | --ctf   | ctf parameters of the image stack |
@@ -171,8 +184,8 @@ Each row shows a selected image and its reconstruction from a batch.
 In the first row, the first image is a 2D projection, the second image is a 2D reconstruction blurred by the corresponding CTF, the third image is the correpsonding experimental image after 2D masking.
 In the second row, the first image is the experimental image supplemented to encoder, the second image is the 2D reconstruction, the third image is the correpsonding experimental image without masking.
 
-You can use ```nohup``` to let the above command execute in background and use redirections like ```1>log 2>err``` to redirect ouput and error messages.
-Happy Training! Contact us if you run into any troubles, since we may miss certain points when writing this tutorial.
+You can use ```nohup``` to let the above command execute in background and use redirections like ```1>log 2>err``` to redirect ouput and error messages to the corresponding files.
+Happy Training! Contact us when running into any troubles.
 
 To restart execution from a checkpoint, you can use
 
@@ -186,7 +199,7 @@ python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-p
 
 boths are in the output directory
 
-During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check out the intermediate result by viewing them using Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
+During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check out the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
 
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following.
@@ -204,7 +217,7 @@ sh analyze.sh ./data/ribo 16 2 16
 
 The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in ./data/ribo/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in ./data/ribo/analyze.16/umap.png .
 
-After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap directly.
+After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap embeddings directly.
 
 You can generate the volume which corresponds to each cluster centroid or traverses the principal component using,
 (you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to use case)
@@ -213,7 +226,7 @@ You can generate the volume which corresponds to each cluster centroid or traver
 sh eval_vol.sh ./data/ribo/ 16 16 1.77 kmeans
 ```
 
-- The first argument after eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
+- The first argument following eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
 - the second argument is the epoch number you just analyzed
 - the third argument is the number of kmeans clusters (or principal component) you used in analysis
 - the fourth argument is the apix of the generated volumes, you can specify a target value
@@ -229,6 +242,7 @@ sh eval_vol.sh ./data/ribo/ 16 1 1.77 pc
 ```
 
 to generate volumes along pc1. You can check volumes in ```./data/ribo/analyze.16/pc1```. You can make a movie using chimerax's vseries feature.
+**PCs are great for visulazing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
 
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
