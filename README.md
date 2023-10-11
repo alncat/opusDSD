@@ -16,7 +16,7 @@ https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-a
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. A newer version with better reconstruction quality is available upon request. An exemplar movie of the new version is shown below:
+Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. There is a program on codeocean https://codeocean.com/capsule/9350896/tree/v1 for testing its inference. A newer version with better reconstruction quality is available upon request. An exemplar movie of the new version is shown below:
 
 
 https://github.com/alncat/opusDSD/assets/3967300/810e85cc-445f-4e8c-bfde-e78fe87ec443
@@ -202,7 +202,7 @@ boths are in the output directory
 During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check out the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
 
 # analyze result <a name="analysis"></a>
-You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following.
+You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following. You can try out our program at https://codeocean.com/capsule/9350896/tree/v1, which is a slightly older version.
 
 The first step is to sample the latent space using kmeans algorithm. Suppose the results are in ```./data/ribo```,
 
