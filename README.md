@@ -185,7 +185,9 @@ The function of each argument is explained as follows:
 
 
 The plot mode will display the following images:
+
 <img width="553" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/68c08944-d096-42a2-bc2f-ec18584f319e">
+
 
 Each row shows a selected image and its reconstruction from a batch.
 In the first row, the first image is the experimental image supplemented to encoder, the second image is a 2D reconstruction blurred by the corresponding CTF, the third image is the correpsonding experimental image after 2D masking.
