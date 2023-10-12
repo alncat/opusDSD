@@ -109,13 +109,14 @@ This program is developed based on cryoDRGN and adheres to a similar data prepar
 2. **Consensus Refinement Result:** The program requires a consensus refinement result, which should not apply any symmetry and must be stored as a Relion STAR file. Other 3D reconstruction results such as 3D classification, as long as they determine the pose parameters of images, can also be supplied as input.
 
 **Usage Example:**
-Assuming the refinement result is stored as `run_data.star` and the format of the Relion STAR file is below version 3.0, 
+
+Assuming the refinement result is stored as `consensus_data.star` and the format of the Relion STAR file is below version 3.0, 
 You can then prepare the pose parameter file by executing the below command inside the opus-dsd folder:
 
 ```
-python -m cryodrgn.commands.parse_pose_star /work/run_data.star -D 192 --Apix 1.35 -o hrd-pose-euler.pkl
+python -m cryodrgn.commands.parse_pose_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-pose-euler.pkl
 ```
-suppose the run_data.star is located at ```/work/``` directory, where
+suppose the consensus_data.star is located at ```/work/``` directory, where
 
 | argument | explanation|
 | --- | --- |
@@ -127,7 +128,7 @@ suppose the run_data.star is located at ```/work/``` directory, where
 Next, you can prepare the ctf parameter file by executing:
 
 ```
-python -m cryodrgn.commands.parse_ctf_star /work/run_data.star -D 192 --Apix 1.35 -o hrd-ctf.pkl -o-g hrd-grp.pkl --ps 0
+python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl -o-g sp-grp.pkl --ps 0
 ```
 | argument | explanation|
 | --- | --- |
@@ -138,9 +139,13 @@ For star file from relion with version hgiher than 3.0, you should add --relion3
 
 Checkout ```prepare.sh``` which combine both commands to save your typing.
 
-Finally, you should create a mask using the consensus model and RELION as in the ```postprocess```. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
 
-After executing all these steps, you have three pkls for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
+```relion_stack_create --i consensus_data.star --o all --one_by_one```
+
+Finally, you should create a mask using the consensus model and RELION as in the ```postprocess```. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+
+After executing all these steps, you have all pkls required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
 
 
 # training <a name="training"></a>
@@ -148,8 +153,9 @@ After executing all these steps, you have three pkls for running opus-DSD in the
 When the pkls are available, you can then train the vae for structural disentanglement proposed in DSD using
 
 ```
-python -m cryodrgn.commands.train_cv /work/hrd.mrcs --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 18 --zdim 8 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/hrd -r ./mask.mrc --downfrac 0.9 --lamb 1. --split hrd-split.pkl --bfactor 4. --templateres 192
+python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 2. --split sp-split.pkl --bfactor 4. --templateres 224
 ```
+
 The second argument after train_cv specified the path of image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is enabled! The default values are setting to them in our program, you can ommit them incase of simplicity.
 
@@ -179,10 +185,11 @@ The function of each argument is explained as follows:
 
 
 The plot mode will display the following images:
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/hrd2d.png?raw=true "2D projections of Hrd1/Hrd3 complex")
+<img width="553" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/68c08944-d096-42a2-bc2f-ec18584f319e">
+
 Each row shows a selected image and its reconstruction from a batch.
-In the first row, the first image is a 2D projection, the second image is a 2D reconstruction blurred by the corresponding CTF, the third image is the correpsonding experimental image after 2D masking.
-In the second row, the first image is the experimental image supplemented to encoder, the second image is the 2D reconstruction, the third image is the correpsonding experimental image without masking.
+In the first row, the first image is the experimental image supplemented to encoder, the second image is a 2D reconstruction blurred by the corresponding CTF, the third image is the correpsonding experimental image after 2D masking.
+
 
 You can use ```nohup``` to let the above command execute in background and use redirections like ```1>log 2>err``` to redirect ouput and error messages to the corresponding files.
 Happy Training! Contact us when running into any troubles.
@@ -190,7 +197,7 @@ Happy Training! Contact us when running into any troubles.
 To restart execution from a checkpoint, you can use
 
 ```
-python -m cryodrgn.commands.train_cv hrd.txt --ctf ./hrd-ctf.pkl --poses ./hrd-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 18 --zdim 8 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 1. --beta cos -o /work/output -r ./mask.mrc --downfrac 0.9 --lamb 1. --load /work/hrd/weights.0.pkl --latents /work/hrd/z.0.pkl --split hrd-split.pkl --bfactor 6.
+python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 12 --zdim 12 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --lamb 2. --valfrac 0.25 --load /work/sp/weights.0.pkl --latents /work/sp/z.0.pkl --split sp-split.pkl --bfactor 4. --templateres 224
 ```
 | argument |  explanation |
 | --- | --- |
@@ -204,10 +211,10 @@ During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (o
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following. You can try out our program at https://codeocean.com/capsule/9350896/tree/v1, which is a slightly older version.
 
-The first step is to sample the latent space using kmeans algorithm. Suppose the results are in ```./data/ribo```,
+The first step is to sample the latent space using kmeans algorithm. Suppose the results are in ```/work/sp```,
 
 ```
-sh analyze.sh ./data/ribo 16 2 16
+sh analyze.sh /work/sp 16 4 16
 ```
 
 - The first argument after ```analyze.sh``` is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl```
@@ -215,7 +222,7 @@ sh analyze.sh ./data/ribo 16 2 16
 - the third argument is the number of PCs you would like to sample for traversal
 - the final argument is the number of clusters for kmeans clustering.
 
-The analysis result will be stored in ./data/ribo/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in ./data/ribo/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in ./data/ribo/analyze.16/umap.png .
+The analysis result will be stored in /work/sp/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in /work/sp/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in /work/sp/analyze.16/umap.png .
 
 After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap embeddings directly.
 
@@ -223,7 +230,7 @@ You can generate the volume which corresponds to each cluster centroid or traver
 (you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to use case)
 
 ```
-sh eval_vol.sh ./data/ribo/ 16 16 1.77 kmeans
+sh eval_vol.sh /work/sp 16 16 2.2 kmeans
 ```
 
 - The first argument following eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
@@ -232,22 +239,22 @@ sh eval_vol.sh ./data/ribo/ 16 16 1.77 kmeans
 - the fourth argument is the apix of the generated volumes, you can specify a target value
 - the last argument specifies wether generating volumes for kmeans clusters or principal components, use ```kmeans``` for kmeans clustering, or ```pc``` for principal components
 
-change to directory ```./data/ribo/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
+change to directory ```/work/sp/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
 correspond to the cluster centroids.
 
 You can use
 
 ```
-sh eval_vol.sh ./data/ribo/ 16 1 1.77 pc
+sh eval_vol.sh /work/sp 16 1 2.2 pc
 ```
 
-to generate volumes along pc1. You can check volumes in ```./data/ribo/analyze.16/pc1```. You can make a movie using chimerax's vseries feature.
+to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's vseries feature.
 **PCs are great for visulazing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
 
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
 ```
-sh parse_pose.sh run_data.star 1.77 240 ./data/ribo/ 16 16
+sh parse_pose.sh /work/consensus_data.star 1.699 320 /work/sp 16 16
 ```
 
 - The first argument after ```parse_pose.sh``` is the star file of all images
@@ -257,4 +264,4 @@ sh parse_pose.sh run_data.star 1.77 240 ./data/ribo/ 16 16
 - The fifth argument is the epoch number you just analyzed
 - The final argument is the number of kmeans clusters you used in analysis
 
-change to directory ```./data/ribo/analyze.16/kmeans16``` to checkout the starfile for images in each cluster.
+change to directory ```/work/sp/analyze.16/kmeans16``` to checkout the starfile for images in each cluster.
