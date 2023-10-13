@@ -143,6 +143,8 @@ Suppose you download the spliceosome dataset. You can prepare a particle stack n
 
 ```relion_stack_create --i consensus_data.star --o all --one_by_one```
 
+***The relion_stack_create might sort the images in data.star file, check the order of images in consensus_data.star and all.star, make sure they are the same!***
+
 Finally, you should create a mask using the consensus model and RELION as in the ```postprocess```. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
 After executing all these steps, you have all pkls required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
