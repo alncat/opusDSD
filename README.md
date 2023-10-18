@@ -16,7 +16,7 @@ https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-a
 
 # Opus-DSD <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. There is a program on codeocean https://codeocean.com/capsule/9350896/tree/v1 for testing its inference. A newer version with better reconstruction quality is available upon request. An exemplar movie of the new version is shown below:
+Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. There is a program on codeocean https://codeocean.com/capsule/9350896/tree/v1 for testing its inference. ***A newer version with better reconstruction quality is available upon request.*** An exemplar movie of the mentioned new version is shown below:
 
 
 https://github.com/alncat/opusDSD/assets/3967300/810e85cc-445f-4e8c-bfde-e78fe87ec443
@@ -29,7 +29,7 @@ This program is built upon a set of great works:
 - [Healpy](https://healpy.readthedocs.io/en/latest/)
 
 
-This project seeks to unravel how a latent space, encoding 3D structural information, can be learned utilizing only 2D image supervisions which are aligned against a consensus reference model.
+This project seeks to unravel how a latent space, encoding 3D structural information, can be learned by utilizing only 2D image supervisions which are aligned against a consensus reference model.
 
 An informative latent space is pivotal as it simplifies data analysis by providing a structured and reduced-dimensional representation of the data.
 
@@ -62,7 +62,7 @@ Comparison between some states:
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/riborna.png?raw=true "80S ribosome rna swing")
 
 
-A more colorful one, the particles are colored according to their projection classes, note the clusters often show certain dominant colors, this is due to the consensus refinement will account structural variations in images by distorting their pose paramters like **fitting a longer rod into a small gap by tilting the rod! (those are all what the consensus refinement can fit!)**
+A more colorful umap is shown above. The particles are colored according to their projection classes, note that the clusters often show certain dominant colors, which is due to structural variations in images are accounted in the consensus refinement by distorting the pose paramters of each particle, like **fitting a longer rod into a small gap by tilting the rod!**
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
@@ -135,31 +135,31 @@ python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Ap
 | -o-g | used to specify the filename of ctf groups of your dataset|
 | --ps |  used to specify the amount of phaseshift in the dataset|
 
-For star file from relion with version hgiher than 3.0, you should add --relion31 and more arguments to the command line!
+For a star file from relion with version hgiher than 3.0, you should add --relion31 and more arguments to the command line!
 
-Checkout ```prepare.sh``` which combine both commands to save your typing.
+Check ```prepare.sh``` which combine both commands to save your typing.
 
 Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
 
 ```relion_stack_create --i consensus_data.star --o all --one_by_one```
 
-***The relion_stack_create might sort the images in data.star file, check the order of images in consensus_data.star and all.star, make sure they are the same!***
+***Sometimes after running some protocols in Relion using all.star, Relion might sort the order of images in the corresponding output starfile. You should make sure that the output starfile and the input all.star have the same order of images, thus the output starfile have the correct parameters for the images in all.mrcs!***
 
-Finally, you should create a mask using the consensus model and RELION as in the ```postprocess```. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+Finally, you should create a mask using the consensus model and RELION through ```postprocess```. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
-After executing all these steps, you have all pkls required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
+After executing all these steps, you have all pkls and files required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
 
 
 # training <a name="training"></a>
 
-When the pkls are available, you can then train the vae for structural disentanglement proposed in DSD using
+When the inputs are available, you can train the vae for structural disentanglement using
 
 ```
 python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 2. --split sp-split.pkl --bfactor 4. --templateres 224
 ```
 
-The second argument after train_cv specified the path of image stack.
-The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is enabled! The default values are setting to them in our program, you can ommit them incase of simplicity.
+The argument following train_cv specifies the image stack.
+The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is selected! Our program set the default values of those arguments to the values shown in above command.
 
 The function of each argument is explained as follows:
 | argument |  explanation |
@@ -176,7 +176,7 @@ The function of each argument is explained as follows:
 | --beta |the schedule for restraint stengths, ```cos``` implements the [cyclic annealing schedule](https://www.microsoft.com/en-us/research/blog/less-pain-more-gain-a-simple-method-for-vae-training-with-less-of-that-kl-vanishing-agony/) and is the default option|
 | -o | the directory name for storing results, such as model weights, latent encodings |
 | -r | ***the solvent mask created from consensus model***, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image dosen't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
-| --downfrac | the downsampling fraction of input image, the input to network will be downsampled to size D\*downfrac, where D is the original size. You can set it according to resolution of consensus model and the ***templateres*** you set. |
+| --downfrac | the downsampling fraction of input image, the input to network will be downsampled to size of D\*downfrac, where D is the original size of image. You can set it according to resolution of consensus model and the ***templateres*** you set. |
 | --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can set it to 1. or higher, for dataset with lower SNR, consider lowering it. Possible ranges are [0.1, 3.]. If you find **the UMAP of embeedings is exaggeratedly stretched into a ribbon**, then the lamb you used during training is too high! |
 | --split | the filename for storing the train-validation split of image stack |
 | --valfrac | the fraction of images in the validation set, default is 0.1 |
@@ -196,7 +196,7 @@ In the first row, the first image is the experimental image supplemented to enco
 
 
 You can use ```nohup``` to let the above command execute in background and use redirections like ```1>log 2>err``` to redirect ouput and error messages to the corresponding files.
-Happy Training! Contact us when running into any troubles.
+Happy Training! **Open an issue when running into any troubles.**
 
 To restart execution from a checkpoint, you can use
 
@@ -208,9 +208,9 @@ python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses .
 | --load | the weight checkpoint from the restarting epoch |
 | --latents | the latent encodings from the restarting epoch |
 
-boths are in the output directory
+both are in the output directory
 
-During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check out the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
+During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. Opus-DSD also reads all images into memory before training, so it may require some more host memories (but this behavior can be toggled off, i didn't add an argument yet)
 
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following. You can try out our program at https://codeocean.com/capsule/9350896/tree/v1, which is a slightly older version.
@@ -228,10 +228,10 @@ sh analyze.sh /work/sp 16 4 16
 
 The analysis result will be stored in /work/sp/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in /work/sp/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in /work/sp/analyze.16/umap.png .
 
-After running the above command once, you can skip umap embedding step by appending the command in analyze.sh with ```--skip-umap```. Our analysis script will read the pickled umap embeddings directly.
+After executing the above command once, you may skip the lengthy umap embedding laterly by appending ```--skip-umap``` to the command in analyze.sh. Our analysis script will read the pickled umap embeddings directly.
 
-You can generate the volume which corresponds to each cluster centroid or traverses the principal component using,
-(you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to use case)
+You can either generate the volume which corresponds to KMeans cluster centroid or traverses the principal component using,
+(you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to your use case)
 
 ```
 sh eval_vol.sh /work/sp 16 16 2.2 kmeans
@@ -252,7 +252,7 @@ You can use
 sh eval_vol.sh /work/sp 16 1 2.2 pc
 ```
 
-to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's vseries feature.
+to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's ```vseries``` feature.
 **PCs are great for visulazing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
 
 Finally, you can also retrieve the star files for images in each kmeans cluster using
