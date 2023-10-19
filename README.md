@@ -137,8 +137,18 @@ python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Ap
 
 For a star file from relion with version hgiher than 3.0, you should add --relion31 and more arguments to the command line!
 
-Check ```prepare.sh``` which combine both commands to save your typing.
+**Simple Data Preparation Using prepare.sh:**
 
+Check ```prepare.sh``` which combine both commands to save your typing, suppose the version of starfile is **below 3.1**, the above process can be simplified as, 
+```
+sh prepare.sh /work/ consensus_data 320 1.699
+```
+ - The first argument after prepare.sh specifies the working directory,
+ - the sencod argument sepcifies the name of starfile without extension,
+ - the third argument specifies the dimension of image
+ - the fourth argument specifies the angstrom per pixel of image
+
+**The pose pkl can be found as /work/consensus_data_pose_euler.pkl, and the ctf pkl can be found as /work/consensus_data_ctf.pkl**
 Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
 
 ```relion_stack_create --i consensus_data.star --o all --one_by_one```
