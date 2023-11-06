@@ -61,7 +61,8 @@ def add_args(parser):
     group.add_argument('--window-r', type=float, default=.85,  help='Windowing radius (default: %(default)s)')
     group.add_argument('--datadir', type=os.path.abspath, help='Path prefix to particle stack if loading relative paths from a .star or .cs file')
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
-    group.add_argument('--lazy-single', default=True, action='store_true', help='Lazy loading if full dataset is too large to fit in memory')
+    group.add_argument('--lazy-single', action='store_true', help='Lazy loading if full dataset is too large to fit in memory')
+    group.add_argument('--notinmem', default=False, action='store_true', help='Reading all images into memory')
     group.add_argument('--lazy', action='store_true', help='Memory efficient training by loading data in chunks')
     group.add_argument('--preprocessed', action='store_true', help='Skip preprocessing steps if input data is from cryodrgn preprocess_mrcs')
     group.add_argument('--max-threads', type=int, default=16, help='Maximum number of CPU cores for FFT parallelization (default: %(default)s)')
@@ -724,7 +725,7 @@ def main(args):
             data = dataset.LazyMRCData(args.particles, norm=args.norm,
                                        real_data=args.real_data, invert_data=args.invert_data,
                                        ind=ind, keepreal=args.use_real, window=False,
-                                       datadir=args.datadir, relion31=args.relion31, window_r=args.window_r)
+                                       datadir=args.datadir, relion31=args.relion31, window_r=args.window_r, in_mem=(not args.notinmem))
         elif args.preprocessed:
             flog(f'Using preprocessed inputs. Ignoring any --window/--invert-data options')
             data = dataset.PreprocessedMRCData(args.particles, norm=args.norm, ind=ind)
