@@ -79,13 +79,7 @@ https://user-images.githubusercontent.com/3967300/221396607-9e4d9882-86f8-4f54-8
 # set up environment <a name="setup"></a>
 
 After cloning the repository, to run this program, you need to have an environment with pytorch and a machine with GPUs. The recommended configuration is a machine with 4 V100 GPUs.
-You can create the conda environment for DSD using the spec-file in the folder and by executing
-
-```
-conda create --name dsd --file spec-file
-```
-
-or using the environment.yml file in the folder by executing
+You can create the conda environment for DSD using the environment.yml file in the folder by executing
 
 ```
 conda env create --name dsd -f environment.yml
