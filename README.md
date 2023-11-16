@@ -149,7 +149,7 @@ Suppose you download the spliceosome dataset. You can prepare a particle stack n
 
 ***Sometimes after running some protocols in Relion using all.star, Relion might sort the order of images in the corresponding output starfile. You should make sure that the output starfile and the input all.star have the same order of images, thus the output starfile have the correct parameters for the images in all.mrcs!***
 
-Finally, you should create a mask using the consensus model and RELION through ```postprocess```. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+Finally, you should **create a mask using the consensus model** and RELION through ```postprocess```, check https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html for more details. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
 After executing all these steps, you have all pkls and files required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
 
