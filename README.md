@@ -104,13 +104,13 @@ This program is developed based on cryoDRGN and adheres to a similar data prepar
 
 **Usage Example:**
 
-Assuming the refinement result is stored as `consensus_data.star` and the format of the Relion STAR file is below version 3.0, 
-You can then prepare the pose parameter file by executing the below command inside the opus-dsd folder:
+Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**, 
+and the consensus_data.star is located at ```/work/``` directory, you can then prepare the pose parameter file **inside the opusDSD source folder** by executing the command below:
 
 ```
 python -m cryodrgn.commands.parse_pose_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-pose-euler.pkl
 ```
-suppose the consensus_data.star is located at ```/work/``` directory, where
+ where
 
 | argument | explanation|
 | --- | --- |
@@ -126,14 +126,14 @@ python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Ap
 ```
 | argument | explanation|
 | --- | --- |
-| -o-g | used to specify the filename of ctf groups of your dataset|
+| -o-g | used to specify the filename of ctf groups of your dataset, which is useless now :-)|
 | --ps |  used to specify the amount of phaseshift in the dataset|
 
-For a star file from relion with version hgiher than 3.0, you should add --relion31 and more arguments to the command line!
+For **the RELION star file with version hgiher than 3.0**, you should add --relion31 and more arguments to the command line!
 
 **Simple Data Preparation Using prepare.sh:**
 
-Check ```prepare.sh``` which combine both commands to save your typing, suppose the version of starfile is **below 3.1**, the above process can be simplified as, 
+Check ```prepare.sh``` which combine both commands to save your typing, suppose **the version of star file is below 3.1**, the above process can be simplified as, 
 ```
 sh prepare.sh /work/ consensus_data 320 1.699
 ```
@@ -149,7 +149,7 @@ Suppose you download the spliceosome dataset. You can prepare a particle stack n
 
 ***Sometimes after running some protocols in Relion using all.star, Relion might sort the order of images in the corresponding output starfile. You should make sure that the output starfile and the input all.star have the same order of images, thus the output starfile have the correct parameters for the images in all.mrcs!***
 
-Finally, you should **create a mask using the consensus model** and RELION through ```postprocess```, check https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html for more details. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
 After executing all these steps, you have all pkls and files required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
 
@@ -165,7 +165,7 @@ python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses .
 The argument following train_cv specifies the image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is selected! Our program set the default values of those arguments to the values shown in above command.
 
-The function of each argument is explained as follows:
+The functionality of each argument is explained in the table:
 | argument |  explanation |
 | --- | --- |
 | --ctf   | ctf parameters of the image stack |
@@ -188,7 +188,7 @@ The function of each argument is explained as follows:
 | --templateres | the size of output volume of our convolutional network, it will be further resampled by spatial transformer before projecting to 2D images. The default value is 192. You may keep it around ```D*downfrac/0.75```, which is larger than the input size. This corresponds to downsampling from the output volume of our network. You can tweak it to other resolutions, larger resolutions can generate sharper density maps, ***choices are Nx16, where N is integer between 8 and 16*** |
 | --plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will display the 2D reconstructions and experimental images after 8 times logging intervals. Namely, you switch to interative mode by including this. |
 | --tmp-prefix | the prefix of intermediate reconstructions, default value is ```tmp```. OPUS-DSD will output temporary reconstructions to the root directory of this program when training, whose names are ```$tmp-prefix.mrc``` |
-| --notinmem | include this arguement to stop OPUS-DSD reading image stacks into host memory before training |
+| --notinmem | include this arguement to let OPUS-DSD reading image stacks from hard disk during training, this is helpful when a huge dataset cannot fit in the memory |
 
 The plot mode will display the following images:
 
