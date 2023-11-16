@@ -65,7 +65,7 @@ def main(args):
     window = args.window
     invert_data = args.invert_data
     downsample = (args.D and args.D < original_D)
-    nokeepreal = args.keepreal
+    nokeepreal = not args.keepreal
     log(f'keepreal {args.keepreal}')
     log(f'lazy {args.lazy}')
     log(f'invert_data {args.invert_data}')
