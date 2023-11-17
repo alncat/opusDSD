@@ -42,6 +42,7 @@ def add_args(parser):
     group.add_argument('-d','--downsample', type=int, help='Downsample volumes to this box size (pixels)')
     group.add_argument('--pc', type=int, default=2, help='Number of principal component traversals to generate (default: %(default)s)')
     group.add_argument('--ksample', type=int, default=20, help='Number of kmeans samples to generate (default: %(default)s)')
+    group.add_argument('--psample', type=int, default=10, help='Number of pc samples to generate (default: %(default)s)')
     return parser
 
 def analyze_z1(z, outdir, vg):
@@ -64,7 +65,7 @@ def analyze_z1(z, outdir, vg):
     ztraj = np.linspace(*np.percentile(z,(5,95)), 10) # or np.percentile(z, np.linspace(5,95,10)) ?
     vg.gen_volumes(outdir, ztraj)
 
-def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=20):
+def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=20, num_pc_samples=10):
     zdim = z.shape[1]
 
     # Principal component analysis
@@ -75,7 +76,7 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
     for i in range(num_pcs):
         start, end = np.percentile(pc[:,i],(5,95))
         log(f'traversing pc {i} from {start} to {end}')
-        z_pc = analysis.get_pc_traj(pca, z.shape[1], 10, i+1, start, end)
+        z_pc = analysis.get_pc_traj(pca, z.shape[1], num_pc_samples, i+1, start, end)
         if not os.path.exists(f'{outdir}/pc{i+1}'):
             os.mkdir(f'{outdir}/pc{i+1}')
         vg.gen_volumes(f'{outdir}/pc{i+1}', z_pc)
@@ -270,7 +271,8 @@ def main(args):
     if zdim == 1:
         analyze_z1(z, outdir, vg)
     else:
-        analyze_zN(z, outdir, vg, groups, skip_umap=args.skip_umap, num_pcs=args.pc, num_ksamples=args.ksample)
+        analyze_zN(z, outdir, vg, groups, skip_umap=args.skip_umap, num_pcs=args.pc,
+                   num_ksamples=args.ksample, num_pc_samples=args.psample)
 
     # copy over template if file doesn't exist
     out_ipynb = f'{outdir}/cryoDRGN_viz.ipynb'
