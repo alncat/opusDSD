@@ -261,7 +261,7 @@ sh eval_vol.sh /work/sp 16 1 2.2 pc
 ```
 
 to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's ```vseries``` feature.
-**PCs are great for visulazing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
+**PCs are great for visualizing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
 
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
