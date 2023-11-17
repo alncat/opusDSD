@@ -79,13 +79,7 @@ https://user-images.githubusercontent.com/3967300/221396607-9e4d9882-86f8-4f54-8
 # set up environment <a name="setup"></a>
 
 After cloning the repository, to run this program, you need to have an environment with pytorch and a machine with GPUs. The recommended configuration is a machine with 4 V100 GPUs.
-You can create the conda environment for DSD using the spec-file in the folder and by executing
-
-```
-conda create --name dsd --file spec-file
-```
-
-or using the environment.yml file in the folder by executing
+You can create the conda environment for DSD using the environment.yml file in the folder by executing
 
 ```
 conda env create --name dsd -f environment.yml
@@ -110,13 +104,13 @@ This program is developed based on cryoDRGN and adheres to a similar data prepar
 
 **Usage Example:**
 
-Assuming the refinement result is stored as `consensus_data.star` and the format of the Relion STAR file is below version 3.0, 
-You can then prepare the pose parameter file by executing the below command inside the opus-dsd folder:
+OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image stack are stored as the python pickle files, aka pkl. Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**, 
+and the consensus_data.star is located at ```/work/``` directory, you can convert STAR to the pose pkl file **inside the opusDSD source folder** by executing the command below:
 
 ```
 python -m cryodrgn.commands.parse_pose_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-pose-euler.pkl
 ```
-suppose the consensus_data.star is located at ```/work/``` directory, where
+ where
 
 | argument | explanation|
 | --- | --- |
@@ -125,28 +119,29 @@ suppose the consensus_data.star is located at ```/work/``` directory, where
 | -o | followed by the filename of pose parameter used by our program|
 | --relion31 | include this argument if you are using star file from relion with version higher than 3.0|
 
-Next, you can prepare the ctf parameter file by executing:
+Next, you can convert STAR to the ctf pkl file by executing:
 
 ```
 python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl -o-g sp-grp.pkl --ps 0
 ```
 | argument | explanation|
 | --- | --- |
-| -o-g | used to specify the filename of ctf groups of your dataset|
+| -o-g | used to specify the filename of ctf groups of your dataset, which is useless now :-)|
 | --ps |  used to specify the amount of phaseshift in the dataset|
 
-For a star file from relion with version hgiher than 3.0, you should add --relion31 and more arguments to the command line!
+For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 and more arguments to the command line!
 
 **Simple Data Preparation Using prepare.sh:**
 
-Check ```prepare.sh``` which combine both commands to save your typing, suppose the version of starfile is **below 3.1**, the above process can be simplified as, 
+Check ```prepare.sh``` which combine both commands to save your typing, suppose **the version of star file is below 3.1**, the above process can be simplified as, 
 ```
 sh prepare.sh /work/ consensus_data 320 1.699
+                $1       $2         $3   $4
 ```
- - The first argument after prepare.sh specifies the working directory,
- - the sencod argument sepcifies the name of starfile without extension,
- - the third argument specifies the dimension of image
- - the fourth argument specifies the angstrom per pixel of image
+ - $1 specifies the working directory,
+ - $2 sepcifies the name of starfile without extension,
+ - $3 specifies the dimension of image
+ - $4 specifies the angstrom per pixel of image
 
 **The pose pkl can be found as /work/consensus_data_pose_euler.pkl, and the ctf pkl can be found as /work/consensus_data_ctf.pkl**
 Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
@@ -155,7 +150,7 @@ Suppose you download the spliceosome dataset. You can prepare a particle stack n
 
 ***Sometimes after running some protocols in Relion using all.star, Relion might sort the order of images in the corresponding output starfile. You should make sure that the output starfile and the input all.star have the same order of images, thus the output starfile have the correct parameters for the images in all.mrcs!***
 
-Finally, you should create a mask using the consensus model and RELION through ```postprocess```. The spliceosome dataset has a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
 After executing all these steps, you have all pkls and files required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
 
@@ -171,7 +166,7 @@ python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses .
 The argument following train_cv specifies the image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is selected! Our program set the default values of those arguments to the values shown in above command.
 
-The function of each argument is explained as follows:
+The functionality of each argument is explained in the table:
 | argument |  explanation |
 | --- | --- |
 | --ctf   | ctf parameters of the image stack |
@@ -194,7 +189,7 @@ The function of each argument is explained as follows:
 | --templateres | the size of output volume of our convolutional network, it will be further resampled by spatial transformer before projecting to 2D images. The default value is 192. You may keep it around ```D*downfrac/0.75```, which is larger than the input size. This corresponds to downsampling from the output volume of our network. You can tweak it to other resolutions, larger resolutions can generate sharper density maps, ***choices are Nx16, where N is integer between 8 and 16*** |
 | --plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will display the 2D reconstructions and experimental images after 8 times logging intervals. Namely, you switch to interative mode by including this. |
 | --tmp-prefix | the prefix of intermediate reconstructions, default value is ```tmp```. OPUS-DSD will output temporary reconstructions to the root directory of this program when training, whose names are ```$tmp-prefix.mrc``` |
-| --notinmem | include this arguement to stop OPUS-DSD reading image stacks into host memory before training |
+| --notinmem | include this arguement to let OPUS-DSD reading image stacks from hard disk during training, this is helpful when a huge dataset cannot fit in the memory |
 
 The plot mode will display the following images:
 
@@ -229,12 +224,13 @@ The first step is to sample the latent space using kmeans algorithm. Suppose the
 
 ```
 sh analyze.sh /work/sp 16 4 16
+                $1    $2 $3 $4
 ```
 
-- The first argument after ```analyze.sh``` is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl```
-- the second argument is the epoch number you would like to analyze,
-- the third argument is the number of PCs you would like to sample for traversal
-- the final argument is the number of clusters for kmeans clustering.
+- $1 is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl```
+- $2 is the epoch number you would like to analyze,
+- $3 is the number of PCs you would like to sample for traversal
+- $4 is the number of clusters for kmeans clustering.
 
 The analysis result will be stored in /work/sp/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in /work/sp/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in /work/sp/analyze.16/umap.png .
 
@@ -245,13 +241,14 @@ You can either generate the volume which corresponds to KMeans cluster centroid 
 
 ```
 sh eval_vol.sh /work/sp 16 16 2.2 kmeans
+                 $1     $2 $3 $4   $5
 ```
 
-- The first argument following eval_vol.sh is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
-- the second argument is the epoch number you just analyzed
-- the third argument is the number of kmeans clusters (or principal component) you used in analysis
-- the fourth argument is the apix of the generated volumes, you can specify a target value
-- the last argument specifies wether generating volumes for kmeans clusters or principal components, use ```kmeans``` for kmeans clustering, or ```pc``` for principal components
+- $1 is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
+- $2 is the epoch number you just analyzed
+- $3 is the number of kmeans clusters (or principal component) you used in analysis
+- $4 is the apix of the generated volumes, you can specify a target value
+- $5 specifies the kind of analysis result where volumes are generated, i.e., kmeans clusters or principal components, use ```kmeans``` for kmeans clustering, or ```pc``` for principal components
 
 change to directory ```/work/sp/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
 correspond to the cluster centroids.
@@ -260,6 +257,7 @@ You can use
 
 ```
 sh eval_vol.sh /work/sp 16 1 2.2 pc
+                $1      $2 $3 $4 $5
 ```
 
 to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's ```vseries``` feature.
@@ -269,13 +267,14 @@ Finally, you can also retrieve the star files for images in each kmeans cluster 
 
 ```
 sh parse_pose.sh /work/consensus_data.star 1.699 320 /work/sp 16 16
+                                $1           $2  $3    $4     $5 $6
 ```
 
-- The first argument after ```parse_pose.sh``` is the star file of all images
-- The second argument is apix value of image
-- The third argument is the dimension of image
-- The fourth arugment is the output directory used in training
-- The fifth argument is the epoch number you just analyzed
-- The final argument is the number of kmeans clusters you used in analysis
+- $1 is the star file of all images
+- $2 is apix value of image
+- $3 is the dimension of image
+- $4 is the output directory used in training
+- $5 is the epoch number you just analyzed
+- $6 is the number of kmeans clusters you used in analysis
 
 change to directory ```/work/sp/analyze.16/kmeans16``` to checkout the starfile for images in each cluster.
