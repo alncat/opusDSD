@@ -237,7 +237,7 @@ The analysis result will be stored in /work/sp/analyze.16, i.e., the output dire
 After executing the above command once, you may skip the lengthy umap embedding laterly by appending ```--skip-umap``` to the command in analyze.sh. Our analysis script will read the pickled umap embeddings directly.
 
 You can either generate the volume which corresponds to KMeans cluster centroid or traverses the principal component using,
-(you can check the content of scirpt first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to your use case)
+(you can check the content of script first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to your use case)
 
 ```
 sh eval_vol.sh /work/sp 16 16 2.2 kmeans
