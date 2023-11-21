@@ -289,10 +289,6 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
         mask = lattice.get_circular_mask(D//2) # restrict to circular mask
         y_recon = model(lattice.coords[mask]/lattice.extent/2 @ rot, z).view(B,-1)
     else:
-        #mask = ctf_grid.max_r - 10
-        #circ_mask_size = 60
-        #enc_circ_mask = ctf_grid.get_cos_mask(circ_mask_size, circ_mask_size+10)
-        #print(y_fft.shape, circular_mask.shape)
         #w_filt    = ctf_grid.shell_to_grid(group_stat.get_wiener_filter(ind))
         if args.encode_mode in ['grad']:
             d_i = 0
@@ -386,8 +382,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
                 #utils.plot_image(axes, y[d_i,...].detach().numpy(), 1)
                 #log("correlations w.o. mask: {}".format(correlations.detach().cpu().numpy()))
 
-            #mask both
-            #y_recon *= mask #_real
+            #mask experimental image
             y_ref   *= mask
 
             if group_stat is not None:
@@ -488,12 +483,6 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         mu2 = losses["mu2"]
     if "std2" in losses:
         std2 = losses["std2"]
-        #z_mu_diff = z_mu.unsqueeze(1) - z_mu.unsqueeze(0) #(B, B, z)
-        #print(z_mu_diff.shape, z_mu.shape)
-        #logvar_diff = z_logstd.unsqueeze(1) - z_logstd.unsqueeze(0) #(B, B, z)
-        #var_diff    = (2.*logvar_diff).exp()
-        #z_mu_diff2  = z_mu_diff.pow(2)/((2.*z_logstd).exp() + 1e-6).unsqueeze(0) #(B, B, z) / (1, B, z)
-        #pairKLD = (0.5*(z_mu_diff2 + var_diff) - logvar_diff).sum()
 
     #print(losses["kldiv"].shape, losses["tvl2"].shape)
     # set a unified mask_sum
@@ -515,7 +504,6 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         #c_mmd = utils.compute_cross_smmd(z_mu, mus, s=1/16, adaptive=False)
         # matching z dim to image space
         # compute cross entropy
-        a, b = 1.577, 0.8951
         c_en = (z_mu.unsqueeze(1) - mus).pow(2).sum(-1) + eps #(B, P)
         c_neg_en = (z_mu.unsqueeze(1) - neg_mus).pow(2).sum(-1) + eps #(B, N)
         #prob = ((-c_en).exp() + eps)/((-c_en).exp() + (-c_neg_en).exp().sum(-1, keepdim=True) + eps)
@@ -546,8 +534,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
 
     if it % (args.log_interval*8) == B and args.plot:
             #group_stat.plot_variance(ind[0])
-            print(mask_sum)
-            #print(logvar_diff.mean().detach(), z_mu_diff2.mean().detach(), var_diff.mean().detach())
+            print("mask_sum: ", mask_sum)
             plt.show()
 
     return loss, gen_loss, snr, mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler, y2.mean()
@@ -951,7 +938,8 @@ def main(args):
     # learning rate scheduler
     # training loop
     # data_generator = DataLoader(data, batch_size=args.batch_size, shuffle=True)
-    args.log_interval = args.batch_size*30
+    if args.log_interval % args.batch_size != 0:
+        args.log_interval = args.batch_size*30
     num_epochs = args.num_epochs
 
     vanilla = args.pe_type == "vanilla"
@@ -992,7 +980,7 @@ def main(args):
                 continue
             batch_it += B
             global_it = Nimg_train*epoch + batch_it
-            save_image = (batch_it % (args.log_interval*4)) == 0
+            save_image = (batch_it % (args.log_interval*4)) == B
 
             beta_control = args.beta_control*snr_ema
             beta = beta_schedule(global_it) * beta_max

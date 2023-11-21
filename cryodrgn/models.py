@@ -253,8 +253,8 @@ class HetOnlyVAE(nn.Module):
         #y_recon_ori = decout["y_recon"]*utils.crop_image(mask, self.down_vol_size)
         pad_size = (self.render_size - self.down_vol_size)//2
         #y_recon_ori = F.pad(y_recon_ori, (pad_size, pad_size, pad_size, pad_size))
-        if self.ref_vol is not None:
-            decout["mask"] = F.pad(decout["mask"], (pad_size, pad_size, pad_size, pad_size))
+        #if self.ref_vol is not None:
+        decout["mask"] = F.pad(decout["mask"], (pad_size, pad_size, pad_size, pad_size))
 
         if len(ctf.shape) == 3:
             #print("ctf: ", ctf[0], others["ctf"].shape)
@@ -443,7 +443,7 @@ class ConvTemplate(nn.Module):
         utils.initmod(self.conv_out, gain=1./np.sqrt(templateres))
 
         self.intermediate_size = int(16*self.templateres/256)
-        log('convtemplate: the output volume is of size {}, intermediate activations will be resampled from 32 to {}'.format(self.templateres, self.intermediate_size))
+        log('convtemplate: the output volume is of size {}, resample intermediate activations of size 16 to {}'.format(self.templateres, self.intermediate_size))
 
         # output rigid grid transformations
 
@@ -516,7 +516,7 @@ class Encoder(nn.Module):
             self.register_buffer("in_mask", in_mask)
             self.use_mask = True
         else:
-            self.register_buffer("mask", (self.transformer_e.grid.pow(2).sum(dim=-1) < 1).float())
+            self.register_buffer("in_mask", (self.transformer_e.grid.pow(2).sum(dim=-1) < 1).float())
             self.use_mask = True
 
         #self.init_conv = nn.Sequential(
@@ -540,7 +540,7 @@ class Encoder(nn.Module):
                 downsample1.append(nn.LeakyReLU(0.2))
             inchannels = outchannels
             #if inchannels == outchannels:
-            outchannels = min(inchannels * 2, 1024)
+            outchannels = min(inchannels * 2, 512)#1024)
             #else:
         self.out_channels = inchannels
         #downsample.append(nn.Conv3d(inchannels, self.out_channels, 4, 2, 1))
@@ -900,20 +900,25 @@ class VanillaDecoder(nn.Module):
                 self.vol_bound = torch.minimum(in_vol_maxs, in_vol_mins).float()
                 self.vol_bound *= (self.templateres/crop_vol.shape[-1]) #(templateres is the size of output volume)
                 self.vol_bound = self.vol_bound.int() + 1
-                log("decoder: setting volume boundary {}".format(self.vol_bound))
+                log("decoder: setting volume boundary to {}".format(self.vol_bound))
 
                 crop_vol = self.transformer.sample(crop_vol)
                 log("decoder: cropping mask from {} to {}, cropping fraction is {}, downsample to {}".format(in_vol.shape[-1], crop_size, mask_frac, crop_vol.shape))
                 self.register_buffer("ref_mask", crop_vol)
 
                 apix_ori = self.Apix
-                self.Apix = (in_vol.shape[-1])/self.render_size*self.Apix
-                log("decoder: changing apix from {} to {}".format(apix_ori, self.Apix))
+                self.Apix = self.vol_size/self.render_size*self.Apix
+                log("decoder: downsampling apix from {} to {}".format(apix_ori, self.Apix))
                 #self.ref_mask_com = (self.transformer.grid*self.ref_mask.unsqueeze(-1)).mean(dim=(0, 1, 2, 3, 4))
                 #print(self.ref_mask_com)
-
-            self.register_buffer("sphere_mask", (torch.sum(self.transformer.grid ** 2, dim=-1) < 1.).float())
-            self.register_buffer("mask_sum", (torch.sum(self.sphere_mask, axis=-3) > 0).sum().detach())
+            else:
+                apix_ori = self.Apix
+                self.vol_bound = [1, 1, 1]
+                self.Apix = self.vol_size/self.render_size*self.Apix
+                log("decoder: downsampling apix from {} to {}".format(apix_ori, self.Apix))
+                self.register_buffer("circle_mask", (torch.sum((torch.sum(self.transformer.grid ** 2, dim=-1) < 1.).float(), dim=-1) > 0.).float())
+                self.ref_mask = None
+                print(self.circle_mask.shape)
 
         self.warp_type = warp_type
 
@@ -1188,16 +1193,6 @@ class VanillaDecoder(nn.Module):
         else:
             template = self.template.unsqueeze(0).unsqueeze(0)
 
-        # downsample template
-        #template = F.interpolate(template, size=200, mode="trilinear", align_corners=ALIGN_CORNERS)
-        #template = F.interpolate(template, size=self.crop_vol_size, mode="trilinear", align_corners=ALIGN_CORNERS)
-        #template_FT = fft.torch_rfft3_center(template)
-        #left = (template.shape[-1] - self.crop_vol_size) // 2
-        #right = self.crop_vol_size + left
-        #scaled_xdim = self.crop_vol_size//2 + 1
-        #template_FT = template_FT[..., left:right, left:right, :scaled_xdim] * (self.crop_vol_size/template.shape[-1]) ** 3
-        #template = fft.torch_irfft3_center(template_FT)
-
         losses = {}
         if self.training:
             losses["l2"] = torch.mean(self.lasso(template)).unsqueeze(0)
@@ -1227,7 +1222,6 @@ class VanillaDecoder(nn.Module):
         B = rots.shape[0]
         #theta = np.zeros((3,4), dtype=np.float32)
 
-        valid = self.sphere_mask #(torch.sum(self.transformer.grid ** 2, dim=-1) < 1.).float()
         if not refine_pose:
             mask_i = self.ref_mask.repeat(ref_fft.shape[1], 1, 1, 1, 1)
             if len(euler.shape) == 2:
@@ -1241,15 +1235,9 @@ class VanillaDecoder(nn.Module):
                 affine_grid = torch.permute(affine_grid, [0,2,3,4,1])
             #pos = F.affine_grid(torch.tensor(theta).unsqueeze(0), (1,1,self.vol_size,self.vol_size,self.vol_size))
             #pos = self.grid @ rots[i]#.transpose(-1, -2)
-            #if not self.use_fourier:
-            #    pos = self.transformer.rotate(rots[i])
-
-            #valid = torch.prod((pos > -1.) * (pos < 1.), dim=-1).float()
 
             if self.fixed_deform:
                 if not self.use_fourier:
-                    #image = []
-                    #image.append(torch.sum(vol, axis=-3).squeeze(0))
                     if refine_pose:
                         euler_i = euler[i:i+1,...] #(B, 3)
                         #R = lie_tools.euler_to_SO3(euler_i)
@@ -1263,6 +1251,7 @@ class VanillaDecoder(nn.Module):
 
                         rand_ang = (torch.rand(1, 1).to(euler.get_device()) - .5)*360
                         #rand_ang = torch.zeros(1, 1).to(euler.get_device())
+                        #rand_ang = euler_i[:, 2:]
 
                         euler2_sample_i = -euler_i[:, 2] #(1,) hopf angle == minus of euler angle
                         euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
@@ -1286,7 +1275,10 @@ class VanillaDecoder(nn.Module):
                         #euler_samples.append(euler_sample_i)
 
                         pos = self.transformer.rotate(rot_i)
-                        valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS)
+                        if self.ref_mask is not None:
+                            valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS)
+                        else:
+                            valid = None
                         if self.fourier_transformer is None:
                             template_i = template[i:i+1,...].repeat(rot.shape[0], 1, 1, 1, 1)
                             if affine is not None:
@@ -1337,7 +1329,10 @@ class VanillaDecoder(nn.Module):
                     ref = self.transformer.rotate_2d(ref_i, -euler2).squeeze(1)
                     refs.append(ref)
                     #pos = self.transformer.rotate(rot) # + 1)/2*(self.crop_vol_size - 1) #(B, 1, H, W, D, 3) x ( B, 1, 1, 3, 3) -> (B, 1, H, W, D, 3)
-                    mask_i = (torch.sum(valid, axis=-3) > 0).detach().squeeze(1)
+                    if valid is not None:
+                        mask_i = (torch.sum(valid, axis=-3) > 0).detach().squeeze(1)
+                    else:
+                        mask_i = self.circle_mask
                     masks.append(mask_i)
 
                     # sample reference image from template
@@ -1388,8 +1383,6 @@ class VanillaDecoder(nn.Module):
                     # append sampled angles
                     euler_samples.append(euler_sample_i)
 
-                    #masks.append((torch.sum(valid, axis=-3) > 0).sum().detach())
-                    #masks.append(self.mask_sum)
                 else:
                     #image = self.fourier_transformer.rotate_and_sampleFT(template_FT[i:i+1,...],
                     #                                                     rots[i], image_ori).squeeze(0)
