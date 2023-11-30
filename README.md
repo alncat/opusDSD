@@ -95,16 +95,16 @@ The inference pipeline of our program can run on any GPU which supports cuda 10.
 
 # prepare data <a name="preparation"></a>
 
-This program is developed based on cryoDRGN and adheres to a similar data preparation process. 
+This program is developed based on cryoDRGN and adheres to a similar data preparation process.
 
 **Data Preparation Guidelines:**
 1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. A good dataset for tutorial is the splicesome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
-   
+
 2. **Consensus Refinement Result:** The program requires a consensus refinement result, which should not apply any symmetry and must be stored as a Relion STAR file. Other 3D reconstruction results such as 3D classification, as long as they determine the pose parameters of images, can also be supplied as input.
 
 **Usage Example:**
 
-OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image stack are stored as the python pickle files, aka pkl. Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**, 
+OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image stack are stored as the python pickle files, aka pkl. Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**,
 and the consensus_data.star is located at ```/work/``` directory, you can convert STAR to the pose pkl file **inside the opusDSD source folder** by executing the command below:
 
 ```
@@ -122,26 +122,29 @@ python -m cryodrgn.commands.parse_pose_star /work/consensus_data.star -D 320 --A
 Next, you can convert STAR to the ctf pkl file by executing:
 
 ```
-python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl -o-g sp-grp.pkl --ps 0
+python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl
 ```
-| argument | explanation|
-| --- | --- |
-| -o-g | used to specify the filename of ctf groups of your dataset, which is useless now :-)|
-| --ps |  used to specify the amount of phaseshift in the dataset|
 
-For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 and more arguments to the command line!
+More information about each option can be displayed using
+
+```
+python -m cryodrgn.commands.parse_ctf_star -h
+```
+
+For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 to the command!
 
 **Simple Data Preparation Using prepare.sh:**
 
-Check ```prepare.sh``` which combine both commands to save your typing, suppose **the version of star file is below 3.1**, the above process can be simplified as, 
+Check ```prepare.sh``` which combine both commands to save your typing, suppose **the version of star file is 3.1**, the above process can be simplified as,
 ```
-sh prepare.sh /work/ consensus_data 320 1.699
-                $1       $2         $3   $4
+sh prepare.sh /work/ consensus_data 320 1.699 --relion31
+                $1       $2         $3   $4    $5
 ```
  - $1 specifies the working directory,
  - $2 sepcifies the name of starfile without extension,
  - $3 specifies the dimension of image
  - $4 specifies the angstrom per pixel of image
+ - $5 indicates the version of starfile, only include --relion31 if the file version is higher than 3.0
 
 **The pose pkl can be found as /work/consensus_data_pose_euler.pkl, and the ctf pkl can be found as /work/consensus_data_ctf.pkl**
 Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
@@ -266,8 +269,8 @@ to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/p
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
 ```
-sh parse_pose.sh /work/consensus_data.star 1.699 320 /work/sp 16 16
-                                $1           $2  $3    $4     $5 $6
+sh parse_pose.sh /work/consensus_data.star 1.699 320 /work/sp 16 16 --relion31
+                                $1           $2  $3    $4     $5 $6  $7
 ```
 
 - $1 is the star file of all images
@@ -276,5 +279,6 @@ sh parse_pose.sh /work/consensus_data.star 1.699 320 /work/sp 16 16
 - $4 is the output directory used in training
 - $5 is the epoch number you just analyzed
 - $6 is the number of kmeans clusters you used in analysis
+- $7 indicates the version of starfile, only include this when the version of starfile is higher than 3.0
 
 change to directory ```/work/sp/analyze.16/kmeans16``` to checkout the starfile for images in each cluster.
