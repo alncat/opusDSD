@@ -972,7 +972,7 @@ def main(args):
                         lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
 
         for minibatch in data_generator:
-            ind = minibatch[-1].to(device)
+            ind = minibatch[-1]#.to(device)
             y = minibatch[0].to(device)
             yt = minibatch[1].to(device) if tilt is not None else None
             B = len(ind)
@@ -1057,7 +1057,7 @@ def main(args):
         # validation
         gen_loss_accum, snr_accum, loss_accum = 0, 0, 0
         for minibatch in val_data_generator:
-            ind = minibatch[-1].to(device)
+            ind = minibatch[-1]#.to(device)
             y = minibatch[0].to(device)
             yt = minibatch[1].to(device) if tilt is not None else None
             B = len(ind)
