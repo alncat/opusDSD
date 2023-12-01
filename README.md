@@ -85,6 +85,12 @@ You can create the conda environment for DSD using the environment.yml file in t
 conda env create --name dsd -f environment.yml
 ```
 
+To setup an environment with cuda11.6, you can use the environmentcu11.yml file.
+
+```
+conda env create --name dsd -f environmentcu11.yml
+```
+
 After the environment is sucessfully created, you can then activate it and execute our program within this environement.
 
 ```
