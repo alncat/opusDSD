@@ -265,7 +265,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             c = ctf.compute_ctf(freqs, *torch.split(ctf_params[:,1:], 1, 1)).view(B,D,D)
         else:
             # ctf_params[:,0] is the angpix
-            ctf_param = ctf_params[ind]
+            ctf_param = ctf_params[ind.to(ctf_params.get_device())]
             freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/ctf_params[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
             c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=args.bfactor).view(B,D-1,-1) #(B, )
 
