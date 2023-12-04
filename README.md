@@ -85,7 +85,7 @@ You can create the conda environment for DSD using the environment.yml file in t
 conda env create --name dsd -f environment.yml
 ```
 
-After the environment is sucessfully created, you can then activate it and execute our program within this environement.
+This environment primarily contains cuda 10.2 and pytorch 1.11.0. To create an environment with cuda 11.3 and pytorch 1.10.1, you can choose ```environmentcu11.yml```. On V100 GPU, OPUS-DSD with cuda 11.3 is 20% faster than OPUS-DSD with cuda 10.2. You can also consider upgrading the pytorch in environmentcu11.yml to 1.11.0 after creating the environment. However, it's worth noting that OPUS-DSD **has not been tested on Pytorch version higher than 1.11.0**. We recommend using pytorch version 1.10.1 or 1.11.0. After the environment is sucessfully created, you can then activate it and execute our program within this environement.
 
 ```
 conda activate dsd
