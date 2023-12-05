@@ -25,9 +25,9 @@ vlog = utils.vlog
 def add_args(parser):
     #parser.add_argument('weights', help='Model weights')
     parser.add_argument('--load', metavar='WEIGHTS.PKL', help='Initialize training from a checkpoint')
-    parser.add_argument('-c', '--config', metavar='PKL', required=True, help='CryoDRGN config.pkl file')
+    parser.add_argument('-c', '--config', metavar='PKL', required=True, help='OPUS-DSD config.pkl file')
     parser.add_argument('-o', type=os.path.abspath, required=True, help='Output .mrc or directory')
-    parser.add_argument('--prefix', default='vol_', help='Prefix when writing out multiple .mrc files (default: %(default)s)')
+    parser.add_argument('--prefix', default='reference', help='Prefix when writing out multiple .mrc files (default: %(default)s)')
     parser.add_argument('-v','--verbose',action='store_true',help='Increaes verbosity')
 
     group = parser.add_argument_group('Specify z values')
@@ -38,7 +38,7 @@ def add_args(parser):
     group.add_argument('--zfile', help='Text file with z-values to evaluate')
 
     group = parser.add_argument_group('Volume arguments')
-    group.add_argument('--Apix', type=float, default=1, help='Pixel size to add to .mrc header (default: %(default)s A/pix)')
+    group.add_argument('--Apix', type=float, default=1, help='Desired pixel size of the ouput volume (default: %(default)s A/pix)')
     group.add_argument('--flip', action='store_true', help='Flip handedness of output volume')
     group.add_argument('-d','--downsample', type=int, help='Downsample volumes to this box size (pixels)')
 
@@ -48,11 +48,11 @@ def add_args(parser):
     group.add_argument('--enc-layers', dest='qlayers', type=int, help='Number of hidden layers')
     group.add_argument('--enc-dim', dest='qdim', type=int, help='Number of nodes in hidden layers')
     group.add_argument('--zdim', type=int,  help='Dimension of latent variable')
-    group.add_argument('--encode-mode', default='grad', choices=('conv','resid','mlp','tilt', 'grad'), help='Type of encoder network')
+    group.add_argument('--encode-mode', default='grad', choices=('conv','resid','mlp','tilt', 'grad'), help='Type of encoder network (default: %(default)s)')
     group.add_argument('--dec-layers', dest='players', type=int, help='Number of hidden layers')
     group.add_argument('--dec-dim', dest='pdim', type=int, help='Number of nodes in hidden layers')
     group.add_argument('--enc-mask', type=int, help='Circular mask radius for image encoder')
-    group.add_argument('--pe-type', default='vanilla', choices=('geom_ft','geom_full','geom_lowf','geom_nohighf','linear_lowf','none', 'vanilla'), help='Type of positional encoding')
+    group.add_argument('--pe-type', default='vanilla', choices=('vanilla'), help='Type of positional encoding (default: %(default)s)')
     group.add_argument('--template-type', default='conv', choices=('conv'), help='Type of template decoding method (default: %(default)s)')
     group.add_argument('--warp-type', choices=('blurmix', 'diffeo', 'deform'), help='Type of warp decoding method (default: %(default)s)')
     group.add_argument('--symm', help='Type of symmetry of the 3D volume (default: %(default)s)')
@@ -186,7 +186,7 @@ def main(args):
         for i,zz in enumerate(z):
             log(zz)
             if vanilla:
-                model.save_mrc(f'{args.o}/reference'+str(i), enc=zz, Apix=args.Apix)
+                model.save_mrc(f'{args.o}/{args.prefix}'+str(i), enc=zz, Apix=args.Apix)
             else:
                 if args.downsample:
                     extent = lattice.extent * (args.downsample/(D-1))
@@ -205,7 +205,7 @@ def main(args):
         z = torch.randn(1, args.zdim).to(device)
         log(z)
         if vanilla:
-            model.save_mrc('reference', enc=z)
+            model.save_mrc(args.prefix, enc=z)
             return
         if args.downsample:
             extent = lattice.extent * (args.downsample/(D-1))
