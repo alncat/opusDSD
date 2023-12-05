@@ -252,15 +252,15 @@ You can either generate the volume which corresponds to KMeans cluster centroid 
 (you can check the content of script first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to your use case)
 
 ```
-sh eval_vol.sh /work/sp 16 16 2.2 kmeans
-                 $1     $2 $3 $4   $5
+sh eval_vol.sh /work/sp 16 kmeans 16 2.2
+                 $1     $2   $3   $4  $5
 ```
 
 - $1 is the output directory used in training, which stores ```weights.*.pkl, z.*.pkl, config.pkl``` and the clustering result
 - $2 is the epoch number you just analyzed
-- $3 is the number of kmeans clusters (or principal component) you used in analysis
-- $4 is the apix of the generated volumes, you can specify a target value
-- $5 specifies the kind of analysis result where volumes are generated, i.e., kmeans clusters or principal components, use ```kmeans``` for kmeans clustering, or ```pc``` for principal components
+- $3 specifies the kind of analysis result where volumes are generated, i.e., kmeans clusters or principal components, use ```kmeans``` for kmeans clustering, or ```pc``` for principal components
+- $4 is the number of kmeans clusters (or principal component) you used in analysis
+- $5 is the apix of the generated volumes, you can specify a target value
 
 change to directory ```/work/sp/analyze.16/kmeans16``` to checkout the reference*.mrc, which are the reconstructions
 correspond to the cluster centroids.
