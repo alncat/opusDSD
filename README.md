@@ -145,9 +145,9 @@ For **the RELION STAR file with version hgiher than 3.0**, you should add --reli
 
 **Simple Data Preparation Using prepare.sh:**
 
-Check ```prepare.sh``` which combine both commands to save your typing, suppose **the version of star file is 3.1**, the above process can be simplified as,
+Check ```prepare.sh``` in analysis_scripts which combine both commands to save your typing, suppose **the version of star file is 3.1**, the above process can be simplified as,
 ```
-sh prepare.sh /work/consensus_data.star 320 1.699 --relion31
+dsdsh prepare /work/consensus_data.star 320 1.699 --relion31
                 $1                      $2    $3    $4
 ```
  - $1 specifies the path of the starfile,
@@ -230,12 +230,12 @@ both are in the output directory
 During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. By default, opus-DSD reads all images into memory before training, so it may require some more host memories **To disable this behavior, you can include ```--notinmem``` into the training command**.
 
 # analyze result <a name="analysis"></a>
-You can use the analysis scripts in opusDSD to visualizing the learned latent space! The analysis procedure is detailed as following. You can try out our program at https://codeocean.com/capsule/9350896/tree/v1, which is a slightly older version.
+You can use the analysis scripts in opusDSD/analysis_scripts to visualizing the learned latent space! The analysis procedure is detailed as following. You can try out our program at https://codeocean.com/capsule/9350896/tree/v1, which is a slightly older version.
 
-The first step is to sample the latent space using kmeans algorithm. Suppose the results are in ```/work/sp```,
+The first step is to sample the latent space using kmeans algorithm. Suppose the training results are in ```/work/sp```, you can invoke the analysis scripts using command like ```dsdsh commandx```,
 
 ```
-sh analyze.sh /work/sp 16 4 16
+dsdsh analyze /work/sp 16 4 16
                 $1    $2 $3 $4
 ```
 
@@ -252,7 +252,7 @@ You can either generate the volume which corresponds to KMeans cluster centroid 
 (you can check the content of script first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to your use case)
 
 ```
-sh eval_vol.sh /work/sp 16 kmeans 16 2.2
+dsdsh eval_vol /work/sp 16 kmeans 16 2.2
                  $1     $2   $3   $4  $5
 ```
 
@@ -268,7 +268,7 @@ correspond to the cluster centroids.
 You can use
 
 ```
-sh eval_vol.sh /work/sp 16 pc 1 2.2
+dsdsh eval_vol /work/sp 16 pc 1 2.2
                 $1      $2 $3 $4 $5
 ```
 
@@ -278,7 +278,7 @@ to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/p
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
 ```
-sh parse_pose.sh /work/consensus_data.star 1.699 320 /work/sp 16 16 --relion31
+dsdsh parse_pose /work/consensus_data.star 1.699 320 /work/sp 16 16 --relion31
                                 $1           $2  $3    $4     $5 $6  $7
 ```
 
