@@ -53,6 +53,11 @@ setup(
     long_description=long_description,
     url='',
     packages=PACKAGES,
+    entry_points={
+        'console_scripts': [
+            'dsd=cryodrgn.__main__:main'
+        ]
+    },
     #package_dir=PACKAGE_DIR,
     package_data=PACKAGE_DATA,
     license='GNU GENERAL PUBLIC LICENSE Version 3',

@@ -91,7 +91,17 @@ This environment primarily contains cuda 11.3 and pytorch 1.11.0. To create an e
 conda activate dsd
 ```
 
-The inference pipeline of our program can run on any GPU which supports cuda 10.2 and is fast to generate a 3D volume. However, the training of our program takes larger amount memory, we recommend using V100 GPUs at least.
+You can then install OPUS-DSD by changing to the directory with cloned repository, and execute
+```
+pip install -e .
+```
+
+OPUS-DSD can be kept up to date by 
+```
+git pull
+```
+
+The inference pipeline of our program can run on any GPU which supports cuda 10.2 or 11.3 and is fast to generate a 3D volume. However, the training of our program takes larger amount memory, we recommend using V100 GPUs at least.
 
 # prepare data <a name="preparation"></a>
 
@@ -108,7 +118,7 @@ OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image
 and the consensus_data.star is located at ```/work/``` directory, you can convert STAR to the pose pkl file **inside the opusDSD source folder** by executing the command below:
 
 ```
-python -m cryodrgn.commands.parse_pose_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-pose-euler.pkl
+dsd parse_pose_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-pose-euler.pkl
 ```
  where
 
@@ -122,13 +132,13 @@ python -m cryodrgn.commands.parse_pose_star /work/consensus_data.star -D 320 --A
 Next, you can convert STAR to the ctf pkl file by executing:
 
 ```
-python -m cryodrgn.commands.parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl
+dsd parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl
 ```
 
 More information about each option can be displayed using
 
 ```
-python -m cryodrgn.commands.parse_ctf_star -h
+dsd parse_ctf_star -h
 ```
 
 For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 to the command!
@@ -162,7 +172,7 @@ After executing all these steps, you have all pkls and files required for runnin
 When the inputs are available, you can train the vae for structural disentanglement using
 
 ```
-python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 2. --split sp-split.pkl --bfactor 4. --templateres 224
+dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 2. --split sp-split.pkl --bfactor 4. --templateres 224
 ```
 
 The argument following train_cv specifies the image stack.
@@ -208,7 +218,7 @@ Happy Training! **Open an issue when running into any troubles.**
 To restart execution from a checkpoint, you can use
 
 ```
-python -m cryodrgn.commands.train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 12 --zdim 12 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --lamb 2. --valfrac 0.25 --load /work/sp/weights.0.pkl --latents /work/sp/z.0.pkl --split sp-split.pkl --bfactor 4. --templateres 224
+dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 12 --zdim 12 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --lamb 2. --valfrac 0.25 --load /work/sp/weights.0.pkl --latents /work/sp/z.0.pkl --split sp-split.pkl --bfactor 4. --templateres 224
 ```
 | argument |  explanation |
 | --- | --- |

@@ -30,10 +30,10 @@ def add_args(parser):
     parser.add_argument('epoch', type=int, help='Epoch number N to analyze (0-based indexing, corresponding to z.N.pkl, weights.N.pkl)')
     parser.add_argument('--device', type=int, help='Optionally specify CUDA device')
     parser.add_argument('-o','--outdir', help='Output directory for analysis results (default: [workdir]/analyze.[epoch])')
-    parser.add_argument('--skip-vol', action='store_true', help='Skip generation of volumes')
+    parser.add_argument('--skip-vol', default=True, action='store_true', help='Skip generation of volumes')
     parser.add_argument('--skip-umap', action='store_true', help='Skip running UMAP')
-    parser.add_argument('--vanilla', action='store_true', help='Skip running UMAP')
-    parser.add_argument('--D', type=int, help='Skip running UMAP')
+    parser.add_argument('--vanilla', default=True, action='store_true', help='Skip running UMAP')
+    parser.add_argument('--D', default=192, type=int, help='Skip running UMAP')
     parser.add_argument('--pose', help='directory for analysis results (default: [workdir]/analyze.[epoch])')
 
     group = parser.add_argument_group('Extra arguments for volume generation')
