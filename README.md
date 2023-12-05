@@ -79,13 +79,13 @@ https://user-images.githubusercontent.com/3967300/221396607-9e4d9882-86f8-4f54-8
 # set up environment <a name="setup"></a>
 
 After cloning the repository, to run this program, you need to have an environment with pytorch and a machine with GPUs. The recommended configuration is a machine with 4 V100 GPUs.
-You can create the conda environment for DSD using the environment.yml file in the folder by executing
+You can create the conda environment for DSD using one of the environment files in the folder by executing
 
 ```
-conda env create --name dsd -f environment.yml
+conda env create --name dsd -f environmentcu11torch11.yml
 ```
 
-This environment primarily contains cuda 10.2 and pytorch 1.11.0. To create an environment with cuda 11.3 and pytorch 1.10.1, you can choose ```environmentcu11.yml```. On V100 GPU, OPUS-DSD with cuda 11.3 is 20% faster than OPUS-DSD with cuda 10.2. You can also consider upgrading the pytorch in environmentcu11.yml to 1.11.0 after creating the environment. However, it's worth noting that OPUS-DSD **has not been tested on Pytorch version higher than 1.11.0**. We recommend using pytorch version 1.10.1 or 1.11.0. After the environment is sucessfully created, you can then activate it and execute our program within this environement.
+This environment primarily contains cuda 11.3 and pytorch 1.11.0. To create an environment with cuda 11.3 and pytorch 1.10.1, you can choose ```environmentcu11.yml```. Lastly, ```environment.yml``` contains cuda 10.2 and pytorch 1.11.0. On V100 GPU, OPUS-DSD with cuda 11.3 is 20% faster than OPUS-DSD with cuda 10.2. However, it's worth noting that OPUS-DSD **has not been tested on Pytorch version higher than 1.11.0**. We recommend using pytorch version 1.10.1 or 1.11.0. After the environment is sucessfully created, you can then activate it and execute our program within this environement.
 
 ```
 conda activate dsd
@@ -137,14 +137,13 @@ For **the RELION STAR file with version hgiher than 3.0**, you should add --reli
 
 Check ```prepare.sh``` which combine both commands to save your typing, suppose **the version of star file is 3.1**, the above process can be simplified as,
 ```
-sh prepare.sh /work/ consensus_data 320 1.699 --relion31
-                $1       $2         $3   $4    $5
+sh prepare.sh /work/consensus_data.star 320 1.699 --relion31
+                $1                      $2    $3    $4
 ```
- - $1 specifies the working directory,
- - $2 sepcifies the name of starfile without extension,
- - $3 specifies the dimension of image
- - $4 specifies the angstrom per pixel of image
- - $5 indicates the version of starfile, only include --relion31 if the file version is higher than 3.0
+ - $1 specifies the path of the starfile,
+ - $2 specifies the dimension of image
+ - $3 specifies the angstrom per pixel of image
+ - $4 indicates the version of starfile, only include --relion31 if the file version is higher than 3.0
 
 **The pose pkl can be found as /work/consensus_data_pose_euler.pkl, and the ctf pkl can be found as /work/consensus_data_ctf.pkl**
 Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
