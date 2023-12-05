@@ -37,7 +37,8 @@ PACKAGE_DATA = {
                 'data/*.pkl',
                 'data/*.star',
                 'data/*.mrcs',
-                'data/*.txt']
+                'data/*.txt'],
+    'opusdsd': ['analysis_scripts/*']
 }
 
 PACKAGE_DIR = {}
@@ -55,7 +56,8 @@ setup(
     packages=PACKAGES,
     entry_points={
         'console_scripts': [
-            'dsd=cryodrgn.__main__:main'
+            'dsd=cryodrgn.__main__:main',
+            'dsdsh=analysis_scripts.__main__:main',
         ]
     },
     #package_dir=PACKAGE_DIR,
