@@ -1,4 +1,3 @@
-name: dsd12
 channels:
   - pytorch
   - conda-forge
