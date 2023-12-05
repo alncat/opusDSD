@@ -268,7 +268,7 @@ correspond to the cluster centroids.
 You can use
 
 ```
-sh eval_vol.sh /work/sp 16 1 2.2 pc
+sh eval_vol.sh /work/sp 16 pc 1 2.2
                 $1      $2 $3 $4 $5
 ```
 
