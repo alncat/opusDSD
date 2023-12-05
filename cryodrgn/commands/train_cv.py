@@ -8,6 +8,7 @@ import argparse
 import pickle
 from datetime import datetime as dt
 import math
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -47,7 +48,7 @@ def add_args(parser):
     parser.add_argument('--group-stat', metavar='pkl', type=os.path.abspath, help='group statistics (.pkl)')
     parser.add_argument('--load', metavar='WEIGHTS.PKL', help='Initialize training from a checkpoint')
     parser.add_argument('--latents', type=os.path.abspath, help='Image latent encodings (.pkl)')
-    parser.add_argument('--split', metavar='pkl', help='Initialize training from a split checkpoint')
+    parser.add_argument('--split', metavar='pkl', required=True, help='Initialize training from a split checkpoint')
     parser.add_argument('--valfrac', type=float, default=0.2, help='the fraction of images held for validation')
     parser.add_argument('--checkpoint', type=int, default=1, help='Checkpointing interval in N_EPOCHS (default: %(default)s)')
     parser.add_argument('--log-interval', type=int, default=1000, help='Logging interval in N_IMGS (default: %(default)s)')
@@ -61,11 +62,9 @@ def add_args(parser):
     group.add_argument('--window-r', type=float, default=.85,  help='Windowing radius (default: %(default)s)')
     group.add_argument('--datadir', type=os.path.abspath, help='Path prefix to particle stack if loading relative paths from a .star or .cs file')
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
-    group.add_argument('--lazy-single', action='store_true', help='Lazy loading if full dataset is too large to fit in memory')
+    group.add_argument('--lazy-single', action='store_true', default=True, help='Lazy loading if full dataset is too large to fit in memory')
     group.add_argument('--notinmem', default=False, action='store_true', help='Reading all images into memory')
     group.add_argument('--lazy', action='store_true', help='Memory efficient training by loading data in chunks')
-    group.add_argument('--preprocessed', action='store_true', help='Skip preprocessing steps if input data is from cryodrgn preprocess_mrcs')
-    group.add_argument('--max-threads', type=int, default=16, help='Maximum number of CPU cores for FFT parallelization (default: %(default)s)')
 
     group = parser.add_argument_group('Tilt series')
     group.add_argument('--tilt', help='Particles (.mrcs)')
@@ -73,11 +72,11 @@ def add_args(parser):
 
     group = parser.add_argument_group('Training parameters')
     group.add_argument('-n', '--num-epochs', type=int, default=20, help='Number of training epochs (default: %(default)s)')
-    group.add_argument('-b','--batch-size', type=int, default=20, help='Minibatch size (default: %(default)s)')
+    group.add_argument('-b','--batch-size', type=int, default=16, help='Minibatch size (default: %(default)s)')
     group.add_argument('--wd', type=float, default=0, help='Weight decay in Adam optimizer (default: %(default)s)')
     group.add_argument('--lr', type=float, default=1.2e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
     group.add_argument('--lamb', type=float, default=1.0, help='restraint strength for umap prior (default: %(default)s)')
-    group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
+    group.add_argument('--downfrac', type=float, default=0.75, help='downsample to (default: %(default)s) of original size')
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
     group.add_argument('--bfactor', type=float, default=4., help='apply bfactor (default: %(default)s) to reconstruction')
     group.add_argument('--beta', default='cos', help='Choice of beta schedule')
@@ -703,26 +702,13 @@ def main(args):
         args.use_real = args.encode_mode == 'conv'
         args.real_data = args.pe_type == 'vanilla'
 
-        if args.lazy:
-            #assert args.preprocessed, "Dataset must be preprocesed with `cryodrgn preprocess_mrcs` in order to use --lazy data loading"
-            assert not args.ind, "For --lazy data loading, dataset must be filtered by `cryodrgn preprocess_mrcs`"
-            #data = dataset.PreprocessedMRCData(args.particles, norm=args.norm)
-            raise NotImplementedError("Use --lazy-single for on-the-fly image loading")
-        elif args.lazy_single:
+        if args.lazy_single:
             data = dataset.LazyMRCData(args.particles, norm=args.norm,
                                        real_data=args.real_data, invert_data=args.invert_data,
                                        ind=ind, keepreal=args.use_real, window=False,
                                        datadir=args.datadir, relion31=args.relion31, window_r=args.window_r, in_mem=(not args.notinmem))
-        elif args.preprocessed:
-            flog(f'Using preprocessed inputs. Ignoring any --window/--invert-data options')
-            data = dataset.PreprocessedMRCData(args.particles, norm=args.norm, ind=ind)
         else:
-            data = dataset.MRCData(args.particles, norm=args.norm,
-                                   invert_data=args.invert_data, ind=ind,
-                                   keepreal=args.use_real, window=args.window,
-                                   datadir=args.datadir, relion31=args.relion31,
-                                   max_threads=args.max_threads, window_r=args.window_r)
-
+            raise NotImplementedError("Use --lazy-single for on-the-fly image loading")
     # Tilt series data -- lots of unsupported features
     else:
         assert args.encode_mode == 'tilt'
@@ -924,6 +910,7 @@ def main(args):
     else:
         log(f'loading train validation split from {args.split}')
         rand_split = torch.load(args.split)
+        assert len(rand_split) == Nimg
     Nimg_train = int(Nimg*(1. - args.valfrac))
     Nimg_test = int(Nimg*args.valfrac)
     train_split, val_split = rand_split[:Nimg_train], rand_split[Nimg_train:]
@@ -971,7 +958,9 @@ def main(args):
         log('learning rate {}, bfactor: {}, beta_max: {}, beta_control: {} for epoch {}'.format(
                         lr_scheduler.get_last_lr(), args.bfactor, beta_max, beta_control, epoch))
 
-        for minibatch in data_generator:
+        loop = tqdm(enumerate(data_generator), total=len(data_generator), leave=True, colour='green', file=sys.stdout)
+        for batch_idx, minibatch in loop:
+        #for minibatch in data_generator:
             ind = minibatch[-1]#.to(device)
             y = minibatch[0].to(device)
             yt = minibatch[1].to(device) if tilt is not None else None
@@ -1031,16 +1020,21 @@ def main(args):
             snr_accum += snr*B
             loss_accum += loss*B
 
+            loop.set_description(f'Train Epoch: [{epoch+1}/{num_epochs}]')
+            loop.set_postfix(beta=beta, loss=loss, snr=snr, mu=np.sqrt(mu2), std=np.sqrt(std2))
             if batch_it % args.log_interval == 0:
-                log('# [Train Epoch: {}/{}] [{}/{} images] ' #gen_loss={:.6f}, '\
-                    'snr2_mu={:.3f}, beta={:.3f}, '                               \
-                    'loss={:.4f}, l1={:.3f}, tv={:.3f}, '                     \
-                    'mu={:.3f}, std={:.3f}, gen_loss_mu={:.4f}, ' \
-                    'gen_loss_std={:.3f}, mse_mu={:.3f}, mse_std={:.3f}, ' \
-                    'barlow_mu={:.4f}, barlow_std={:.4f}, c_mmd_mu={:.4f}, c_mmd_std={:.4f}'.format(epoch+1, num_epochs, batch_it,
-                                                    Nimg_train, snr_ema, beta, loss, l1_loss, tv_loss,
-                                                     np.sqrt(mu2), np.sqrt(std2), gen_loss_ema, np.sqrt(gen_loss_var_ema),
-                                                    mse_ema, np.sqrt(mse_var_ema), mmd_ema, np.sqrt(mmd_var_ema), c_mmd_ema, np.sqrt(c_mmd_var_ema)))
+                tqdm.write("Additional info at {}, l1={:.5f}, tv={:.5f}, snr={:.4f}, mse={:.4f}, gen_loss={:.5f}".format(
+                                            batch_it, l1_loss, tv_loss, snr_ema, mse_ema, gen_loss_ema,), file=sys.stdout)
+            #if batch_it % args.log_interval == 0:
+            #    log('# [Train Epoch: {}/{}] [{}/{} images] ' #gen_loss={:.6f}, '\
+            #        'snr2_mu={:.3f}, beta={:.3f}, '                               \
+            #        'loss={:.4f}, l1={:.3f}, tv={:.3f}, '                     \
+            #        'mu={:.3f}, std={:.3f}, gen_loss_mu={:.4f}, ' \
+            #        'gen_loss_std={:.3f}, mse_mu={:.3f}, mse_std={:.3f}, ' \
+            #        'barlow_mu={:.4f}, barlow_std={:.4f}, c_mmd_mu={:.4f}, c_mmd_std={:.4f}'.format(epoch+1, num_epochs, batch_it,
+            #                                        Nimg_train, snr_ema, beta, loss, l1_loss, tv_loss,
+            #                                         np.sqrt(mu2), np.sqrt(std2), gen_loss_ema, np.sqrt(gen_loss_var_ema),
+            #                                        mse_ema, np.sqrt(mse_var_ema), mmd_ema, np.sqrt(mmd_var_ema), c_mmd_ema, np.sqrt(c_mmd_var_ema)))
             if batch_it % (args.log_interval*10) == 0:
                 out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
                 log('save {}'.format(out_z))
@@ -1056,7 +1050,9 @@ def main(args):
 
         # validation
         gen_loss_accum, snr_accum, loss_accum = 0, 0, 0
-        for minibatch in val_data_generator:
+        loop = tqdm(enumerate(val_data_generator), total=len(val_data_generator), leave=True, file=sys.stdout)
+        for batch_idx, minibatch in loop:
+        #for minibatch in val_data_generator:
             ind = minibatch[-1]#.to(device)
             y = minibatch[0].to(device)
             yt = minibatch[1].to(device) if tilt is not None else None
