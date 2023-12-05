@@ -40,7 +40,7 @@ vlog = utils.vlog
 def add_args(parser):
     parser.add_argument('particles', type=os.path.abspath, help='Input particles (.mrcs, .star, .cs, or .txt)')
     parser.add_argument('-o', '--outdir', type=os.path.abspath, required=True, help='Output directory to save model')
-    parser.add_argument('-r', '--ref_vol', type=os.path.abspath, help='Input volume (.mrcs)')
+    parser.add_argument('-r', '--ref_vol', type=os.path.abspath, help='Input consensus mask (.mrcs)')
     parser.add_argument('--zdim', type=int, required=False, help='Dimension of latent variable')
     parser.add_argument('--poses', type=os.path.abspath, required=True, help='Image poses (.pkl)')
     parser.add_argument('--ctf', metavar='pkl', type=os.path.abspath, help='CTF parameters (.pkl)')
@@ -59,15 +59,14 @@ def add_args(parser):
     group.add_argument('--ind', type=os.path.abspath, metavar='PKL', help='Filter particle stack by these indices')
     group.add_argument('--uninvert-data', dest='invert_data', action='store_false', help='Do not invert data sign')
     group.add_argument('--no-window', dest='window', action='store_false', help='Turn off real space windowing of dataset')
-    group.add_argument('--window-r', type=float, default=.85,  help='Windowing radius (default: %(default)s)')
+    group.add_argument('--window-r', type=float, default=.85,  help='Windowing radius if the consensus mask is not given (default: %(default)s)')
     group.add_argument('--datadir', type=os.path.abspath, help='Path prefix to particle stack if loading relative paths from a .star or .cs file')
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
-    group.add_argument('--lazy-single', action='store_true', default=True, help='Must enbale it for DSD(default: %(default)s')
+    group.add_argument('--lazy-single', action='store_true', default=True, help='The dataloader for opus-DSD (default: %(default)s)')
     group.add_argument('--notinmem', default=False, action='store_true', help='Read all images into memory (default: %(default)s)')
 
     group = parser.add_argument_group('Tilt series')
     group.add_argument('--tilt', help='Particles (.mrcs)')
-    group.add_argument('--tilt-deg', type=float, default=45, help='X-axis tilt offset in degrees (default: %(default)s)')
 
     group = parser.add_argument_group('Training parameters')
     group.add_argument('-n', '--num-epochs', type=int, default=20, help='Number of training epochs (default: %(default)s)')
