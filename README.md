@@ -278,13 +278,13 @@ to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/p
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
 ```
-dsdsh parse_pose /work/consensus_data.star 1.699 320 /work/sp 16 16 --relion31
+dsdsh parse_pose /work/consensus_data.star 320 1.699 /work/sp 16 16 --relion31
                                 $1           $2  $3    $4     $5 $6  $7
 ```
 
 - $1 is the star file of all images
-- $2 is apix value of image
-- $3 is the dimension of image
+- $2 is the dimension of image
+- $3 is apix value of image
 - $4 is the output directory used in training
 - $5 is the epoch number you just analyzed
 - $6 is the number of kmeans clusters you used in analysis

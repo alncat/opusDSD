@@ -10,26 +10,26 @@ def main():
     # Subparser for command1
     parser_command1 = subparsers.add_parser('eval_vol')
     # Add arguments for command1 if needed
-    # parser_command1.add_argument(...)
-    parser_command1.set_defaults(func=wrapper.eval_vol)
+    wrapper.eval_vol.add_args(parser_command1)
+    parser_command1.set_defaults(func=wrapper.eval_vol.main)
 
     # Subparser for command2
     parser_command2 = subparsers.add_parser('analyze')
     # Add arguments for command2 if needed
-    # parser_command2.add_argument(...)
-    parser_command2.set_defaults(func=wrapper.analyze)
+    wrapper.analyze.add_args(parser_command2)
+    parser_command2.set_defaults(func=wrapper.analyze.main)
 
     # Subparser for command2
     parser_command2 = subparsers.add_parser('parse_pose')
     # Add arguments for command2 if needed
-    # parser_command2.add_argument(...)
-    parser_command2.set_defaults(func=wrapper.parse_pose)
+    wrapper.parse_pose.add_args(parser_command2)
+    parser_command2.set_defaults(func=wrapper.parse_pose.main)
 
     # Subparser for command2
     parser_command2 = subparsers.add_parser('prepare')
     # Add arguments for command2 if needed
-    # parser_command2.add_argument(...)
-    parser_command2.set_defaults(func=wrapper.prepare)
+    wrapper.prepare.add_args(parser_command2)
+    parser_command2.set_defaults(func=wrapper.prepare.main)
 
     args = parser.parse_args()
     if args.command:
