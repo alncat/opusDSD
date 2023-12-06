@@ -148,9 +148,9 @@ dsd parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl
 
 For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 to the command!
 
-**Simple Data Preparation Using prepare.sh:**
+**Simple Data Preparation Using ```dsdsh prepare```:**
 
-Check ```prepare.sh``` in analysis_scripts which combine both commands to save your typing, suppose **the version of star file is 3.1**, the above process can be simplified as,
+There is a command ```dsdsh prepare``` which combine both process. Under the hood, ```dsdsh prepare``` points to the prepare.sh inside analysis_scripts. Suppose **the version of star file is 3.1**, the above process can be simplified as,
 ```
 dsdsh prepare /work/consensus_data.star 320 1.699 --relion31
                 $1                      $2    $3    $4
@@ -161,6 +161,7 @@ dsdsh prepare /work/consensus_data.star 320 1.699 --relion31
  - $4 indicates the version of starfile, only include --relion31 if the file version is higher than 3.0
 
 **The pose pkl can be found as /work/consensus_data_pose_euler.pkl, and the ctf pkl can be found as /work/consensus_data_ctf.pkl**
+
 Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
 
 ```relion_stack_create --i consensus_data.star --o all --one_by_one```
