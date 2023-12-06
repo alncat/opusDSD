@@ -114,6 +114,17 @@ This program is developed based on cryoDRGN and adheres to a similar data prepar
 
 **Usage Example:**
 
+In overall, the commands in OPUS-DSD can be invoked by calling
+```
+dsd commandx ...
+```
+
+More information about each argument of the command can be displayed using
+
+```
+dsd commandx -h
+```
+
 OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image stack are stored as the python pickle files, aka pkl. Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**,
 and the consensus_data.star is located at ```/work/``` directory, you can convert STAR to the pose pkl file **inside the opusDSD source folder** by executing the command below:
 
@@ -133,12 +144,6 @@ Next, you can convert STAR to the ctf pkl file by executing:
 
 ```
 dsd parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl
-```
-
-More information about each option can be displayed using
-
-```
-dsd parse_ctf_star -h
 ```
 
 For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 to the command!
