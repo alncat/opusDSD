@@ -236,7 +236,8 @@ both are in the output directory
 During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. By default, opus-DSD reads all images into memory before training, so it may require some more host memories **To disable this behavior, you can include ```--notinmem``` into the training command**.
 
 # analyze result <a name="analysis"></a>
-You can use the analysis scripts in opusDSD/analysis_scripts to visualizing the learned latent space! The analysis procedure is detailed as following. You can try out our program at https://codeocean.com/capsule/9350896/tree/v1, which is a slightly older version.
+You can use the analysis scripts in opusDSD/analysis_scripts to visualizing the learned latent space! The analysis procedure is detailed as following.
+
 The analysis scripts can be invoked by calling command like
 ```
 dsdsh commandx ...
