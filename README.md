@@ -231,9 +231,17 @@ During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (o
 
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in opusDSD/analysis_scripts to visualizing the learned latent space! The analysis procedure is detailed as following. You can try out our program at https://codeocean.com/capsule/9350896/tree/v1, which is a slightly older version.
+The analysis scripts can be invoked by calling command like
+```
+dsdsh commandx ...
+```
 
-The first step is to sample the latent space using kmeans algorithm. Suppose the training results are in ```/work/sp```, you can invoke the analysis scripts using command like ```dsdsh commandx```,
+To access detailed usage information for each command, execute the following:
+```
+dsdsh commandx -h
+```
 
+The first step is to sample the latent space using kmeans and PCA algorithms. Suppose the training results are in ```/work/sp```, 
 ```
 dsdsh analyze /work/sp 16 4 16
                 $1    $2 $3 $4
