@@ -76,7 +76,7 @@ class Starfile():
         # get to data block
         if relion31:
             optics_header, optics_df = Starfile.get_block(f, 'data_optics')
-            print(optics_header, optics_df)
+            #print(optics_header, optics_df)
         BLOCK = 'data_particles' if relion31 else 'data_'
         headers, df = Starfile.get_block(f, BLOCK)
         multibodies = []
@@ -98,7 +98,7 @@ class Starfile():
         f = open(starfile,'r')
         if relion31:
             optics_header, optics_df = Starfile.get_block(f, 'data_optics')
-            print(optics_header, optics_df)
+            #print(optics_header, optics_df)
         # get to data block
         BLOCK = 'data_particles' if relion31 else 'data_'
         while 1:

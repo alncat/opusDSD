@@ -203,6 +203,18 @@ def quaternions_to_SO3_wiki(q):
         2*(x*z - y*w), 2*(y*z + x*w), 1. - 2*x*x - 2*y*y
         ], -1).view(*q.shape[:-1], 3, 3)
 
+def exp_quaternion(q):
+    '''exponentiate q'''
+    q_norm = q.norm(p=2, dim=-1, keepdim=True)
+    sinc_v = torch.special.sinc(q_norm/np.pi)
+    q = torch.cat([q_norm.cos(), sinc_v*q], dim=-1)
+    return q
+
+def rot_to_axis(R):
+    quat = SO3_to_quaternions_wiki(R)
+    axis = quat[..., 1:]
+    return torch.nn.functional.normalize(axis, p=2, dim=-1)
+
 def zrot(x):
     x = x*np.pi/180.
     ca = x.cos()

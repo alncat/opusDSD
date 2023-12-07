@@ -36,9 +36,14 @@ def add_args(parser):
     group.add_argument('--z-end', type=np.float32, nargs='*', help='Specify an ending z-value')
     group.add_argument('-n', type=int, default=10, help='Number of structures between [z_start, z_end]')
     group.add_argument('--zfile', help='Text file with z-values to evaluate')
+    group.add_argument('--deform', action='store_true', help='deforming the structure')
+    group.add_argument('--template-z', help='path for template encoding')
+    group.add_argument('--template-z-ind', type=int, help='the index of the selected template encoding')
+    group.add_argument('--masks', help='path for the masks')
+    group.add_argument('--num-bodies', type=int, default=0, help='number of rigid bodies (default: %(default)s)')
 
     group = parser.add_argument_group('Volume arguments')
-    group.add_argument('--Apix', type=float, default=1, help='Desired pixel size of the ouput volume (default: %(default)s A/pix)')
+    group.add_argument('--Apix', type=float, default=1, help='Desired pixel size of the output volume (default: %(default)s A/pix)')
     group.add_argument('--flip', action='store_true', help='Flip handedness of output volume')
     group.add_argument('-d','--downsample', type=int, help='Downsample volumes to this box size (pixels)')
 
@@ -92,15 +97,26 @@ def main(args):
     enc_mask = -1
     D = cfg['lattice_args']['D'] # image size + 1
     zdim = cfg['model_args']['zdim']
+    if "z_affine_dim" in cfg['model_args']:
+        z_affine_dim = cfg['model_args']['z_affine_dim']
+    else:
+        z_affine_dim = 4
     norm = cfg['dataset_args']['norm']
     lattice = Lattice(D, extent=0.5)
     downfrac = cfg['dataset_args']['downfrac']
-    down_vol_size = cfg['model_args']['down_vol_size']
+    crop_vol_size = cfg['model_args']['down_vol_size']
     Apix = cfg['model_args']['Apix']
     templateres = cfg['model_args']['templateres']
     #args.Apix = down_vol_size/((D - 1)*downfrac*0.85)*Apix
-    window_r = down_vol_size/((D-1)*downfrac)
+    window_r = crop_vol_size/((D-1)*downfrac)
     downfrac *= Apix/args.Apix
+
+    # load masks
+    if args.masks:
+        masks_params = torch.load(args.masks)
+    else:
+        masks_params = None
+
     log("Apix: changing from training apix {} to target apix {}".format(Apix, args.Apix))
     log("the output volume by convnet will further downsample by downfrac: {} to achieve desired apix".format(downfrac))
     assert templateres is not None
@@ -120,7 +136,8 @@ def main(args):
                 num_struct=args.num_struct,
                 device=device, symm=args.symm, ctf_grid=None,
                 deform_emb_size=args.deform_size, downfrac=downfrac,
-                templateres=templateres, window_r=window_r)
+                templateres=templateres, window_r=window_r, masks_params=masks_params,
+                num_bodies=args.num_bodies, z_affine_dim=z_affine_dim)
 
     vanilla = args.pe_type == "vanilla"
 
@@ -174,7 +191,15 @@ def main(args):
         else:
             if vanilla:
                 #z = utils.load_pkl(args.zfile)
-                z = np.loadtxt(args.zfile).reshape(-1, zdim)
+                if not args.deform:
+                    z = np.loadtxt(args.zfile).reshape(-1, zdim)
+                else:
+                    template_z = np.loadtxt(args.template_z).reshape(-1, zdim)
+                    len_template = template_z.shape[0]
+                    assert args.template_z_ind < len_template, f"template-z-ind {args.template_z_ind} must be smaller than {len_template}"
+                    template_z = torch.tensor(template_z[args.template_z_ind, :]).float().to(device)
+                    log(template_z)
+                    z = np.loadtxt(args.zfile).reshape(-1, z_affine_dim)
                 z = torch.tensor(z).float().to(device)
             else:
                 z = np.loadtxt(args.zfile).reshape(-1, zdim)
@@ -185,6 +210,9 @@ def main(args):
         log(f'Generating {len(z)} volumes')
         for i,zz in enumerate(z):
             log(zz)
+            if args.deform:
+                #null_z = torch.zeros(zdim).to(device)
+                zz = torch.cat([template_z, zz], dim=-1)
             if vanilla:
                 model.save_mrc(f'{args.o}/{args.prefix}'+str(i), enc=zz, Apix=args.Apix)
             else:
@@ -218,7 +246,7 @@ def main(args):
         mrc.write(args.o, vol.astype(np.float32), Apix=args.Apix)
 
     td = dt.now()-t1
-    log('Finished in {}'.format(td))
+    log('Finsihed in {}'.format(td))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)

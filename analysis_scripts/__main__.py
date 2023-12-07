@@ -31,6 +31,12 @@ def main():
     wrapper.prepare.add_args(parser_command2)
     parser_command2.set_defaults(func=wrapper.prepare.main)
 
+    # Subparser for command2
+    parser_command2 = subparsers.add_parser('prepare_multi')
+    # Add arguments for command2 if needed
+    wrapper.prepare_multi.add_args(parser_command2)
+    parser_command2.set_defaults(func=wrapper.prepare_multi.main)
+
     args = parser.parse_args()
     if args.command:
         args.func(args)

@@ -80,8 +80,25 @@ class prepare_multi:
     @classmethod
     def add_args(cls, parser):
         parser.add_argument('starfile', type=os.path.abspath, help='starfile for refinement')
+        parser.add_argument('D', type=int, help='the size of image in the input stack')
+        parser.add_argument('apix', type=float, help='the apix of the input stack')
+        parser.add_argument('masks', type=os.path.abspath, help='starfile storing masks for multi-body refinement')
+        parser.add_argument('numb', type=int, help='the number of rigid-bodies for multi-body refinement')
+        parser.add_argument('--volumes', type=os.path.abspath, help='the path to the volume series generated according to PCA')
+        parser.add_argument('--relion31', action='store_true', help='if the input starfile is of version 3.1')
 
     @classmethod
     def main(cls, args):
         script_path = os.path.join(os.path.dirname(__file__), 'prepare_multi.sh')
-        subprocess.call(['bash', script_path])
+        if args.relion31:
+            if args.volumes:
+                subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.masks, str(args.numb), '--volumes ' + args.volumes, '--relion31'])
+            else:
+                subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.masks, str(args.numb), '--relion31'])
+        else:
+            if args.volumes:
+                subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.masks, str(args.numb), '--volumes ' + args.volumes,])
+            else:
+                subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.masks, str(args.numb),])
+
+

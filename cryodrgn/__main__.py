@@ -16,6 +16,7 @@ def main():
     import cryodrgn.commands.train_nn
     import cryodrgn.commands.train_vae
     import cryodrgn.commands.train_cv
+    import cryodrgn.commands.train_multi
     import cryodrgn.commands.eval_vol
     import cryodrgn.commands.eval_images
     import cryodrgn.commands.analyze
@@ -34,6 +35,7 @@ def main():
         cryodrgn.commands.backproject_voxel,
         #cryodrgn.commands.train_vae,
         cryodrgn.commands.train_cv,
+        cryodrgn.commands.train_multi,
         cryodrgn.commands.eval_vol,
         #cryodrgn.commands.eval_images,
         cryodrgn.commands.analyze,

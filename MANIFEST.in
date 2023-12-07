@@ -1,1 +1,2 @@
 include cryodrgn/templates/*ipynb
+include analysis_scripts/*.sh

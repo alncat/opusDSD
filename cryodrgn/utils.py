@@ -677,6 +677,30 @@ def R_to_relion_scipy(rot, degrees=True):
         euler *= np.pi/180
     return euler
 
+def align_with_z(axis):
+    #R = Ry Rb Ra
+    x = axis[..., 0]
+    y = axis[..., 1]
+    z = axis[..., 2]
+    proj_mod = torch.sqrt(y**2 + z**2)
+    R = torch.zeros(3, 3)#.to(axis.get_device())
+    if proj_mod > 1e-5:
+        R[..., 0, 0] = proj_mod
+        R[..., 0, 1] = -x * y / proj_mod
+        R[..., 0, 2] = -x * z / proj_mod
+        R[..., 1, 0] = 0
+        R[..., 1, 1] = z / proj_mod
+        R[..., 1, 2] = -y / proj_mod
+        R[..., 2, 0] = x
+        R[..., 2, 1] = y
+        R[..., 2, 2] = z
+    else:
+        R[..., 0, 2] = -1 if x > 0 else 1
+        R[..., 1, 1] = 1
+        R[..., 2, 0] = 1 if x > 0 else -1
+    #print(R@axis)
+    return R
+
 def xrot(tilt_deg):
     '''Return rotation matrix associated with rotation over the x-axis'''
     theta = tilt_deg*np.pi/180

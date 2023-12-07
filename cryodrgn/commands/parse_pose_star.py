@@ -12,7 +12,7 @@ log = utils.log
 def add_args(parser):
     parser.add_argument('input', help='RELION .star file')
     parser.add_argument('-D', type=int, required=True, help='Box size of reconstruction (pixels)')
-    parser.add_argument('--relion31', action='store_true', help='Flag for relion3.1 star format')
+    parser.add_argument('--relion31', default=False, action='store_true', help='Flag for relion3.1 star format')
     parser.add_argument('--Apix', type=float, help='Pixel size (A); Required if translations are specified in Angstroms')
     parser.add_argument('-o', metavar='PKL', type=os.path.abspath, required=False, help='Output pose.pkl')
     parser.add_argument('--labels', metavar='PKL', type=os.path.abspath, required=False, help='Output label.pkl')

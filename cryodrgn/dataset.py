@@ -240,6 +240,36 @@ class VolData(data.Dataset):
     def get(self):
         return self.volume
 
+    def center_of_mass(self,):
+        mass = ((self.volume > 0)*self.volume).sum()
+        x_idx = torch.linspace(0, self.N-1, self.N) - self.N/2 #[-s, s)
+        grid = torch.meshgrid(x_idx, x_idx, x_idx, indexing='ij')
+        xgrid = grid[2]
+        ygrid = grid[1]
+        zgrid = grid[0]
+        grid = torch.stack([xgrid, ygrid, zgrid], dim=-1)
+        vol = ((self.volume > 0).float()*self.volume).unsqueeze(-1)
+        center = vol*grid
+        center = center.sum(dim=(0,1,2))
+        assert mass.item() > 0
+        center /= mass
+        center = torch.where(center > 0, (center + 0.5).int(), (center - 0.5).int()).float()
+        centered = (grid - center)*vol
+        radius = (centered).pow(2)
+        r = torch.sqrt(radius.sum(dim=(0,1,2))/mass)
+        #principal axes
+        matrix = -centered.unsqueeze(-1) * centered.unsqueeze(-2)
+        radius_sum = torch.eye(3) * (radius.sum(dim=-1, keepdim=True).unsqueeze(-1))
+        matrix = ((matrix+radius_sum)*vol.unsqueeze(-1)).sum(dim=(0, 1, 2))
+        eigvals, eigvecs = np.linalg.eig(matrix.numpy())
+        indices = np.argsort(eigvals)
+        #print(matrix, eigvals[indices])
+        eigvecs = torch.from_numpy(eigvecs[:, indices].T) # eigvecs[0] is the first eigen vector with largest eigenvalues
+        #print(eigvecs @ eigvecs[2])
+
+        return center, r, eigvecs
+
+
 class MRCData(data.Dataset):
     '''
     Class representing an .mrcs stack file
