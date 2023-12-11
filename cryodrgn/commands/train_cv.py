@@ -506,7 +506,8 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     if it % (args.log_interval*8) == B and args.plot:
             #group_stat.plot_variance(ind[0])
             print("mask_sum: ", mask_sum)
-            plt.show()
+            plt.savefig('tmp.png')
+            #plt.show()
 
     return loss, gen_loss, snr, mu2.mean(), std2.mean(), cross_corr, c_mmd, top_euler, y2.mean()
 

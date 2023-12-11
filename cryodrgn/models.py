@@ -854,7 +854,7 @@ class SpatialTransformer(nn.Module):
         assert roted.shape == torch.Size([coms.shape[0], grid_size, grid_size, grid_size, 3])
         #resample weight to new frame
         radius = radius.unsqueeze(1).unsqueeze(1).unsqueeze(1) * self.scale
-        mask_weights = torch.exp(-0.125*(roted.detach().pow(2)/radius**2).sum(dim=-1, keepdim=True)) + 1e-5
+        mask_weights = torch.exp(-0.231*(roted.detach().pow(2)/radius**2).sum(dim=-1, keepdim=True)) + 1e-5
         #print(mask_weights, radius)
         #mask_weights /= mask_weights.sum(dim=0, keepdim=True)
         assert mask_weights.shape == torch.Size([coms.shape[0], grid_size, grid_size, grid_size, 1])
@@ -1660,6 +1660,7 @@ class VanillaDecoder(nn.Module):
             images_fft = fft.torch_fft2_center(images)*ctf
             images_corrected = fft.torch_ifft2_center(images_fft)
             images_corrected = utils.crop_image(images_corrected, self.crop_vol_size)
+            images = utils.crop_image(images, self.crop_vol_size)
 
         if save_mrc:
             if self.use_fourier:

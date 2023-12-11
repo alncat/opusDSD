@@ -276,7 +276,8 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             # ctf_params[:,0] is the angpix
             ctf_param = ctf_params[ind.to(ctf_params.get_device())]
             freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/ctf_params[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
-            random_b = np.random.rand()*2.
+            #random_b = np.random.rand()*2.
+            random_b = np.random.gamma(1.5, 0.6)
             c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=args.bfactor + random_b).view(B,D-1,-1) #(B, )
 
     # encode
@@ -543,7 +544,8 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         #group_stat.plot_variance(ind[0])
         log(f"mask_sum {mask_sum.detach().cpu()}")
         print(probs)
-        plt.show()
+        plt.savefig('tmp.png')
+        #plt.show()
 
     return loss, gen_loss, snr, mu2.mean(), z_snr.mean(), rot_loss, tran_loss, top_euler, y2.mean()
 
