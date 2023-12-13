@@ -450,7 +450,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1)).sum(dim=(-1, -2)).view(B, -1) + y_recon2
         #print(l2_diff)
         #print(y_recon.shape, y.shape, l2_diff.shape, mask_sum.shape)
-        probs = F.softmax(-l2_diff.detach()*0.25, dim=-1).detach()
+        probs = F.softmax(-l2_diff.detach()*0.5, dim=-1).detach()
         #get argmax
         #inds = torch.argmax(probs, dim=-1, keepdim=True)
         #inds = inds.unsqueeze(-1).repeat(1, 1, 3)
@@ -517,7 +517,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     eps = 1e-3
     kld, mu2 = utils.compute_kld(z_mu, z_logstd)
     #cross_corr = utils.compute_cross_corr(z_mu)
-    loss = gen_loss + beta_control*beta*(kld)/mask_sum + 0.5*torch.mean(5e-1*losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
+    loss = gen_loss + beta_control*beta*(kld)/mask_sum + 0.5*torch.mean(3e-1*losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
     if 'aff2' in losses:
         loss = loss + 0.25*losses['aff2'].mean()/mask_sum
     if body_poses_pred is not None:

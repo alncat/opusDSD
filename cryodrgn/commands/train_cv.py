@@ -426,7 +426,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
             l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1)).sum(dim=(-1, -2)).view(B, -1) + y_recon2
             #l2_diff = (-2.*y_recon.unsqueeze(2)*y.unsqueeze(1) + y_recon.unsqueeze(2)**2).sum(dim=(-1, -2)).view(B, -1)
             #print(y_recon.shape, y.shape, l2_diff.shape, mask_sum.shape)
-            probs = F.softmax(-l2_diff.detach()*0.25, dim=-1).detach()
+            probs = F.softmax(-l2_diff.detach()*0.5, dim=-1).detach()
             #get argmax
             #inds = torch.argmax(probs, dim=-1, keepdim=True)
             #inds = inds.unsqueeze(-1).repeat(1, 1, 3)
@@ -489,7 +489,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
         eps = 1e-3
         kld, mu2 = utils.compute_kld(z_mu, z_logstd)
         cross_corr = utils.compute_cross_corr(z_mu)
-        loss = gen_loss + beta_control*beta*(kld)/mask_sum + torch.mean(5e-1*losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
+        loss = gen_loss + beta_control*beta*(kld)/mask_sum + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
         # compute cross entropy
         c_en = (z_mu.unsqueeze(1) - mus).pow(2).sum(-1) + eps #(B, P)
         c_neg_en = (z_mu.unsqueeze(1) - neg_mus).pow(2).sum(-1) + eps #(B, N)
@@ -1072,29 +1072,12 @@ def main(args):
              'total loss = {:.6f}; Finished in {}'.format(epoch+1,
                                                          gen_loss_accum/Nimg_test,
                                                          snr_accum/Nimg_test, loss_accum/Nimg_test, dt.now()-t2))
-
-
-        #if args.checkpoint and epoch % args.checkpoint == 0:
-        #    out_weights = '{}/weights.{}.pkl'.format(args.outdir,epoch)
-        #    out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
-        #    out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
-        #    model.eval()
-        #    with torch.no_grad():
-        #        if not vanilla:
-        #            z_mu, z_logvar = eval_z(model, lattice, data, args.batch_size,
-        #                                    device, posetracker.trans, tilt is not None, ctf_params, args.use_real)
-        #        else:
-        #            z_mu = None
-        #            z_logvar = None
-
-        #        save_checkpoint(model, optim, posetracker, pose_optimizer,
-        #                        epoch, z_mu, z_logvar, out_weights, out_z, vanilla=vanilla, out_pose=out_pose)
-        #    if args.do_pose_sgd and epoch >= args.pretrain:
-        #        out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
-        #        posetracker.save(out_pose)
-        #    if group_stat is not None:
-        #        out_group_stat = '{}/group_stat.{}.pkl'.format(args.outdir, epoch)
-        #        group_stat.save(out_group_stat)
+        out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
+        log('save {}'.format(out_z))
+        posetracker.save_emb(out_z)
+        out_pose = '{}/pose.{}.pkl'.format(args.outdir, epoch)
+        log('save {}'.format(out_pose))
+        posetracker.save(out_pose)
         #update learning rate
         lr_scheduler.step()
     # save model weights, latent encoding, and evaluate the model on 3D lattice
