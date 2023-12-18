@@ -7,7 +7,7 @@ class eval_vol:
     def add_args(cls, parser):
         parser.add_argument('resdir', type=os.path.abspath, help='result directory')
         parser.add_argument('N', type=int, help='epoch number')
-        parser.add_argument('method', choices=('kmeans','pc', 'dpc'), default='kmeans', help='choosing an analysis method (default: %(default)s),
+        parser.add_argument('method', choices=('kmeans','pc', 'dpc'), default='kmeans', help='choosing an analysis method (default: %(default)s), \
                             dpc is used to reconstruct multi-body dynamics')
         parser.add_argument('num', type=int, help='the number of KMeans clusters or PCs for reconstruction')
         parser.add_argument('apix', type=float, help='desired apix of the output volume')
@@ -87,7 +87,7 @@ class prepare_multi:
         parser.add_argument('numb', type=int, help='the number of bodies defined for multi-body refinement')
         parser.add_argument('--volumes', type=os.path.abspath, help='the path to the volume series generated from PCA for defining rotation axes')
         parser.add_argument('--relion31', action='store_true', help='whether the input starfile is of version 3.1')
-        parser.add_argument('--outmasks', default='mask_params', help='the name of pkl file storing masks related parameters,
+        parser.add_argument('--outmasks', default='mask_params', help='the name of pkl file storing masks related parameters, \
                             you should omit the filetype name .pkl')
 
     @classmethod

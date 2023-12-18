@@ -215,8 +215,8 @@ def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels
     fig, ax = plt.subplots()
     if plot_scatter:
         plt.scatter(x, y, alpha=alpha, s=s, rasterized=True,)
-    plt.xticks(fontsize=15)
-    plt.yticks(fontsize=15)
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
 
     # plot cluster centers
     if centers_ind is not None:
@@ -242,7 +242,7 @@ def scatter_annotate(x, y, centers=None, centers_ind=None, annotate=True, labels
         #centers_an[1] += np.array([0.1, -0.2])
         #centers_an[8] += np.array([-0.3, 0.])
         for i in labels:
-            ax.annotate(str(i), centers_an[i], fontsize=14, weight="bold")
+            ax.annotate(str(i), centers_an[i], fontsize=12, weight="bold")
     return fig, ax
 
 def scatter_annotate_hex(x, y, centers=None, centers_ind=None, annotate=True, labels=None):
