@@ -484,7 +484,8 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     if not vanilla:
         loss = gen_loss + beta_control*(beta-kld)**2/mask.sum().float()
     else:
-        lamb = args.lamb*(1. - torch.exp(-(snr.detach()/0.01)**2)) #.5 #10 1 0.02
+        lamb = args.lamb * (1. - torch.exp(-torch.clamp((snr.detach()/0.02)**2, max=16))) * \
+                        (1. - torch.exp(-torch.clamp((losses['l2'].mean().detach()/0.002)**2, max=16)))
         #print(lamb)
         eps = 1e-3
         kld, mu2 = utils.compute_kld(z_mu, z_logstd)
@@ -911,7 +912,7 @@ def main(args):
         snr_ema = 0.01
         mse_ema = 0.01
         mse_var_ema = 0.1
-        mmd_ema = 0.
+        l1_ema = 0.0001
         mmd_var_ema = 0.1
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
@@ -936,7 +937,8 @@ def main(args):
             global_it = Nimg_train*epoch + batch_it
             save_image = (batch_it % (args.log_interval*4)) == B
 
-            beta_control = args.beta_control*snr_ema
+            beta_control = args.beta_control*snr_ema* \
+                            (1. - np.exp(-(l1_ema/0.002)**2))
             beta = beta_schedule(global_it) * beta_max
 
             yr = torch.from_numpy(data.particles_real[ind.numpy()]).to(device) if args.use_real else None
@@ -966,20 +968,19 @@ def main(args):
 
             # logging
             # compute moving average of generator loss, snr, and mmd
-            delta         = snr - snr_ema
-            snr_ema += (1-ema_mu)*delta
-            delta         = gen_loss - gen_loss_ema
-            gen_loss_ema += (1-ema_mu)*delta
+            def moving_avg(ema, x):
+                delta = x - ema
+                return ema + (1-ema_mu)*delta, delta
+            snr_ema, delta = moving_avg(snr_ema, snr)
+            gen_loss_ema, delta = moving_avg(gen_loss_ema, gen_loss)
             gen_loss_var_ema = ema_mu*(gen_loss_var_ema + (1-ema_mu)*delta**2)
-            delta         = mse - mse_ema
-            mse_ema += (1-ema_mu)*delta
+            mse_ema, delta = moving_avg(mse_ema, mse)
             mse_var_ema = ema_mu*(mse_var_ema + (1-ema_mu)*delta**2)
-            delta         = mmd - mmd_ema
-            mmd_ema += (1-ema_mu)*delta
+            l1_ema, delta = moving_avg(l1_ema, l1_loss)
+
             mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
-            delta         = c_mmd - c_mmd_ema
-            c_mmd_ema += (1-ema_mu)*delta
-            c_mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
+            c_mmd_ema, delta = moving_avg(c_mmd_ema, c_mmd)
+            c_mmd_var_ema = ema_mu*(c_mmd_var_ema + (1-ema_mu)*delta**2)
 
             gen_loss_accum += gen_loss*B
             snr_accum += snr*B
@@ -988,8 +989,8 @@ def main(args):
             loop.set_description(f'Train Epoch: [{epoch+1}/{num_epochs}]')
             loop.set_postfix(beta=beta, loss=loss, snr=snr, mu=np.sqrt(mu2), std=np.sqrt(std2),)
             if batch_it % args.log_interval == 0:
-                tqdm.write("Additional info at {}, l1={:.5f}, tv={:.5f}, snr={:.4f}, mse={:.4f}, gen_loss={:.5f}".format(batch_it,
-                                                    l1_loss, tv_loss, snr_ema, mse_ema, gen_loss_ema), file=sys.stdout)
+                tqdm.write("Additional info at {}, l1={:.5f}, tv={:.5f}, snr={:.4f}, mse={:.4f}, gen_loss={:.5f}, bc={:.4f}".format(
+                                            batch_it, l1_ema, tv_loss, snr_ema, mse_ema, gen_loss_ema, beta_control), file=sys.stdout)
 
             #if batch_it % args.log_interval == 0:
             #    log('# [Train Epoch: {}/{}] [{}/{} images] ' #gen_loss={:.6f}, '\

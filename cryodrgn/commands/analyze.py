@@ -70,7 +70,8 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
     zdim = z.shape[1]
 
     # Principal component analysis
-    print(z[:4, :])
+    log('the first 4 zs are')
+    log(f'{z[:4, :]}')
     log('Perfoming principal component analysis...')
     pc, pca = analysis.run_pca(z)
     log('Generating volumes...')
@@ -150,13 +151,13 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
         g.ax_joint.legend(handles=handles, labels=labels)
 
         g.set_axis_labels('UMAP1','UMAP2')
-        #plt.tight_layout()
+        plt.tight_layout()
         plt.savefig(f'{outdir}/umap.png')
 
         plt.figure(4)
         g = sns.jointplot(x=umap_emb[:,0], y=umap_emb[:,1], kind='hex')
         g.set_axis_labels('UMAP1','UMAP2')
-        #plt.tight_layout()
+        plt.tight_layout()
         plt.savefig(f'{outdir}/umap_hexbin.png')
 
         #plt.figure(5)
@@ -187,16 +188,16 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
         analysis.scatter_annotate(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True,
                                   xlim=(xmin, xmin+interval), ylim=(ymin, ymin+interval),
                                   alpha=.1, s=.5)
-        #plt.xlabel('UMAP1', fontsize=14, weight='bold')
-        #plt.ylabel('UMAP2', fontsize=14, weight='bold')
+        plt.xlabel('UMAP1', fontsize=14, weight='bold')
+        plt.ylabel('UMAP2', fontsize=14, weight='bold')
         plt.savefig(f'{outdir}/kmeans{K}/centers.svg')
 
         g, _ = analysis.scatter_annotate(umap_emb[:,0], umap_emb[:,1], centers_ind=centers_ind, annotate=True,
                                       xlim=(xmin, xmin+interval), ylim=(ymin, ymin+interval),
                                       alpha=.1, s=.5, plot_scatter=True)
-        plt.xlabel('UMAP1')
-        plt.ylabel('UMAP2')
-        #plt.tight_layout()
+        plt.xlabel('UMAP1', fontsize=14, weight='bold')
+        plt.ylabel('UMAP2', fontsize=14, weight='bold')
+        plt.tight_layout()
         plt.savefig(f'{outdir}/kmeans{K}/umap.png')
 
     for i in range(num_pcs):

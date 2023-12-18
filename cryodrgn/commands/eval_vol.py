@@ -169,6 +169,11 @@ def main(args):
             model_dict = model.decoder.state_dict()
             # 1. filter out unnecessary keys
             pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
+            for k in list(pretrained_dict.keys()):
+                if "affine_head" in k or "second_order_head" in k:
+                    if pretrained_dict[k].shape != model_dict[k].shape:
+                        print(k, pretrained_dict[k].shape, model_dict[k].shape)
+                        del pretrained_dict[k]
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict
@@ -207,7 +212,7 @@ def main(args):
         if not os.path.exists(args.o):
             os.makedirs(args.o)
 
-        log(f'Generating {len(z)} volumes')
+        log(f'Generating {len(z)} volumes in {args.o}')
         for i,zz in enumerate(z):
             log(zz)
             if args.deform:

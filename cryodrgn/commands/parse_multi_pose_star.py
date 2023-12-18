@@ -35,13 +35,26 @@ def center_of_mass(volume):
     #principal axes
     matrix = -centered.unsqueeze(-1) * centered.unsqueeze(-2)
     radius_sum = torch.eye(3) * (radius.sum(dim=-1, keepdim=True).unsqueeze(-1))
-    matrix = ((matrix+radius_sum)*vol.unsqueeze(-1)).sum(dim=(0, 1, 2))
+    #print((matrix*(vol.unsqueeze(-1))).sum(dim=(0,1,2)), radius_sum.sum(dim=(0,1,2)))
+    matrix = ((matrix*vol.unsqueeze(-1)+radius_sum)).sum(dim=(0, 1, 2))
     eigvals, eigvecs = np.linalg.eig(matrix.numpy())
     indices = np.argsort(eigvals)
     #print(matrix, eigvals[indices])
     eigvecs = torch.from_numpy(eigvecs[:, indices].T) # eigvecs[0] is the first eigen vector with largest eigenvalues
+    #print("matrix @ eigvecs", matrix, eigvecs @ matrix @ eigvecs.T)
+    new_coords = (centered)@eigvecs.T
+    new_coords = -new_coords.unsqueeze(-1) * (centered @ eigvecs.T).unsqueeze(-2)
+    new_coords = new_coords * vol.unsqueeze(-1)
+    radius_sum = -torch.diagonal(new_coords, dim1=-2, dim2=-1).sum()
+    #radius_sum = -(new_coords[..., 0, 0] + new_coords[..., 1, 1] + new_coords[..., 2, 2]).sum()
+    matrix_new = new_coords.sum(dim=(0,1,2)) + torch.eye(3)*radius_sum
+    matrix_new /= mass
+    #print(matrix, torch.sqrt(matrix_new))
+    assert np.all(eigvals >  0)
+    print("r, r_p: ", r, torch.sqrt(eigvals/mass))
+    r_p = torch.sqrt(eigvals/mass)
 
-    return center, r, eigvecs
+    return center, r_p, eigvecs
 
 def add_args(parser):
     parser.add_argument('input', help='RELION .star file')
@@ -50,10 +63,10 @@ def add_args(parser):
     parser.add_argument('--Apix', type=float, help='Pixel size (A); Required if translations are specified in Angstroms')
     parser.add_argument('-o', metavar='PKL', type=os.path.abspath, required=False, help='Output pose.pkl')
     parser.add_argument('--labels', metavar='PKL', type=os.path.abspath, required=False, help='Output label.pkl')
-    parser.add_argument('--masks', metavar='PKL', type=os.path.abspath, required=False, help='masks for multi-body')
+    parser.add_argument('--masks', metavar='PKL', type=os.path.abspath, required=False, help='mask starfile for multi-body refinement')
     parser.add_argument('--volumes', metavar='PKL', type=os.path.abspath, required=False, help='Output label.pkl')
-    parser.add_argument('--bodies', type=int, required=True, help='Number of bodies')
-    parser.add_argument('--outdir', type=os.path.abspath)
+    parser.add_argument('--bodies', type=int, required=True, help='Number of bodies in mask starfile')
+    parser.add_argument('--outmasks', default="mask_params", help="the name of pkl file storing masks related parameters")
     return parser
 
 def main(args):
@@ -163,7 +176,7 @@ def main(args):
         print(mask_name)
         ref_vol = dataset.VolData(mask_name)
         masks.append(ref_vol.get())
-        c, r, eigvecs = ref_vol.center_of_mass()
+        c, r, eigvecs = center_of_mass(ref_vol.get())#.center_of_mass()
         com_bodies.append(c)
         radii.append(r)
         axes.append(eigvecs)
@@ -183,12 +196,15 @@ def main(args):
             if b_i == 0:
                 #interpolate mask
                 scale = masks.shape[-1]/vols[-1].shape[-1]
+                # TODO: actually, the volumes are cropped, but masks are not cropped
                 masks = F.interpolate(masks.unsqueeze(0), vols[-1].shape, mode='trilinear').squeeze()
                 print(masks.sum(dim=(1,2,3)))
 
         c0s = []
         c1s = []
         vol_coms = []
+        #reset radii
+        radii = []
         principal_axes = []
         for m_i in range(masks.shape[0]):
             c0, r0, p0 = center_of_mass(vols[0]*masks[m_i])
@@ -200,7 +216,8 @@ def main(args):
             c0s.append(c0)
             c1s.append(c1)
             #print(c0, c1)
-            vol_com, _, p_axes = center_of_mass(vols[4]*masks[m_i])
+            vol_com, r, p_axes = center_of_mass(vols[4]*masks[m_i])
+            radii.append(r*scale)
             vol_coms.append(vol_com*scale)
             principal_axes.append(p_axes)
 
@@ -234,6 +251,7 @@ def main(args):
         vol_coms = torch.stack(vol_coms, dim=0)
         principal_axes = torch.stack(principal_axes, dim=0)
         print("translation orientations determined from volume series: ", orientations)#, principal_axes)
+        print("principal_axes: ", principal_axes)
 
     consensus_mask = masks.mean(dim=0)
     #weights = F.softmax(masks*4, dim=0)
@@ -276,12 +294,12 @@ def main(args):
     #print("A_rot90: ", A_rot90)
     #print("relats: ", relats)
     print("rotate_directions using mask centers: ", rotate_directions_ori)
-    print("orient_bodies which aligns difference of centers to z: ", orient_bodies)
-    output_name = prefix + "/mask_params.pkl"
+    print("orient_bodies which aligns difference of coms to z axis: ", orient_bodies)
+    output_name = prefix + f"/{args.outmasks}.pkl"
     log(f'Writing parameters to {output_name}')
     if not args.volumes:
-        torch.save({"in_relatives": in_relatives, "com_bodies": com_bodies,
-                "orient_bodies": orient_bodies, "rotate_directions": rotate_directions_ori, "radii_bodies": radii_bodies}, \
+        torch.save({"in_relatives": relats, "com_bodies": com_bodies,
+                "orient_bodies": orient_bodies, "rotate_directions": rotate_directions_ori, "radii_bodies": radii_bodies, "principal_axes": axes}, \
     #            #"weights": weights, "consensus_mask": consensus_mask},
                output_name)
     else:

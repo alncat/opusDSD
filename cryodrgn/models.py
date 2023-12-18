@@ -683,7 +683,7 @@ class Encoder(nn.Module):
                 # x_i_ori is the original image after shifting
                 x_i_ori = fft.torch_ifft2_center(x_fft, center_fft=True)
                 x_i_ori = utils.crop_image(x_i_ori, self.crop_vol_size)
-                b_factor = np.random.rand() - 0.5
+                b_factor = 1.5*(np.random.rand() - 0.5)
                 x_fft_b = self.bfactor_blurring(x_fft, b_factor)
                 # x_i is randomly augmented
                 x_i = fft.torch_ifft2_center(x_fft_b, center_fft=True)
@@ -822,7 +822,7 @@ class SpatialTransformer(nn.Module):
             return torch.stack([x*y, y*z, -(x**2 + y**2)*0.5 + z**2,
                             x*z, (x**2 - y**2)*0.5], dim=-1)
 
-    def multi_sh_grid(self, rot_ori, rot_resi, coms, trans, tbody, radius=None, second_coeffs=None):
+    def multi_volume_grid(self, rot_ori, rot_resi, coms, trans, tbody, radius=None, second_coeffs=None):
         # tbody should be added to grid
         zero = torch.zeros_like(tbody)[..., :1]
         tcom = (coms).unsqueeze(1) * self.scale
@@ -855,6 +855,63 @@ class SpatialTransformer(nn.Module):
         #resample weight to new frame
         radius = radius.unsqueeze(1).unsqueeze(1).unsqueeze(1) * self.scale
         mask_weights = torch.exp(-0.231*(roted.detach().pow(2)/radius**2).sum(dim=-1, keepdim=True)) + 1e-5
+        #print(mask_weights, radius)
+        #mask_weights /= mask_weights.sum(dim=0, keepdim=True)
+        assert mask_weights.shape == torch.Size([coms.shape[0], grid_size, grid_size, grid_size, 1])
+        # compute the final grid as \sum w_i*Delta_i + x
+        body_grid = (mask_weights*(roted + (tcom + tbody.unsqueeze(1)).unsqueeze(1).unsqueeze(1) - grid_rot)) \
+                     .sum(dim=0, keepdim=True) + grid_rot
+        # resample body_grid to target resolution
+        body_grid = torch.permute(body_grid, dims=[0,4,1,2,3])
+        body_grid = F.interpolate(body_grid, size=self.templateres, mode="trilinear", align_corners=ALIGN_CORNERS)
+        body_grid = torch.permute(body_grid, dims=[0,2,3,4,1])
+        valid = None
+        return body_grid, valid, tbody_img
+
+    def multi_sh_grid(self, rot_ori, rot_resi, coms, trans, tbody, radius=None, second_coeffs=None, axes=None):
+        # tbody should be added to grid
+        zero = torch.zeros_like(tbody)[..., :1]
+        tcom = (coms).unsqueeze(1) * self.scale
+        Rtcom = tcom @ torch.transpose(rot_ori.squeeze(1).squeeze(1), -1, -2) #coms: (n, 1, 3) x rot_resi: (n, 3, 3)
+        #tbody_r = (tbody.unsqueeze(1) @ rot_resi.detach()).squeeze(1)
+        #print(tbody_r)
+        rot = rot_ori@rot_resi.unsqueeze(1).unsqueeze(1) #(1, 1, 1, 3, 3) x (n, 1, 1, 3, 3)
+        #map tbody to image frame tbody_img = tbody_r @ rot_resi.T @ rot_ori.T
+        tbody_img = ((tbody).unsqueeze(1) @ torch.transpose(rot.squeeze(1).squeeze(1), -1, -2)).squeeze(1)
+        # grid coarse is the coordinate in image's reference frame
+        # Delta = R_d^T(x' - c)) - x' + c + dt or (R_d^T - I)(x' - c) + dt, x' = R^T x
+        # Delta + x' is the displaced field, mask relative to center Delta + x' - (c + dt)
+        # Delta = (R_d^T - I)(x' - c) + dt + second_order
+        # mask is R_d^T(x' - c) + second_order
+        grid_rot = self.grid_coarse @ rot_ori
+        #roted = (self.grid_coarse + (-Rtcom + (trans).unsqueeze(1)).unsqueeze(1).unsqueeze(1)) @ rot + tbody.unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        #print(grid_rot.shape, tcom.shape, tbody.shape, rot_resi.shape)
+        gcenter = grid_rot - tcom.unsqueeze(1).unsqueeze(1)
+        if second_coeffs is not None:
+            if axes is not None:
+                gsec = gcenter @ axes.unsqueeze(1).unsqueeze(1)
+            else:
+                gsec = gcenter
+            second_order = self.compute_second_order(gsec[..., 0], gsec[..., 1], gsec[..., 2])
+            #print(second_order.shape, second_coeffs.shape)
+            second_order = second_order @ (second_coeffs.unsqueeze(1).unsqueeze(1) / self.templateres)
+            if axes is not None:
+                second_order = second_order @ torch.transpose(axes.unsqueeze(1).unsqueeze(1), -2, -1)
+            #roted = gcenter@rot_resi.unsqueeze(1).unsqueeze(1) + tbody.unsqueeze(1).unsqueeze(1).unsqueeze(1) + second_order
+            roted = (gcenter + second_order)@rot_resi.unsqueeze(1).unsqueeze(1)
+            #roted = gcenter@rot_resi.unsqueeze(1).unsqueeze(1) + second_order
+        else:
+            roted = gcenter@rot_resi.unsqueeze(1).unsqueeze(1) #+ tbody.unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        grid_size = self.templateres//2
+        assert roted.shape == torch.Size([coms.shape[0], grid_size, grid_size, grid_size, 3])
+        #resample weight to new frame
+        radius = radius.unsqueeze(1).unsqueeze(1).unsqueeze(1) * self.scale
+        #rotate by axes
+        if axes is not None:
+            rroted = roted.detach() @ axes.unsqueeze(1).unsqueeze(1)
+            mask_weights = torch.exp(-0.2*(rroted.pow(2)/radius**2).sum(dim=-1, keepdim=True)) + 1e-5
+        else:
+            mask_weights = torch.exp(-0.2*(roted.detach().pow(2)/radius**2).sum(dim=-1, keepdim=True)) + 1e-5
         #print(mask_weights, radius)
         #mask_weights /= mask_weights.sum(dim=0, keepdim=True)
         assert mask_weights.shape == torch.Size([coms.shape[0], grid_size, grid_size, grid_size, 1])
@@ -1043,12 +1100,14 @@ class VanillaDecoder(nn.Module):
                     self.register_buffer("orient_bodies", masks_params["orient_bodies"])
                     self.register_buffer("orient_bodiesT", torch.transpose(masks_params["orient_bodies"], 1, 2))
                     #self.register_buffer("principal_axes", masks_params["principal_axes"])
-                    #self.register_buffer("principal_axesT", torch.transpose(masks_params["principal_axes"], 1, 2))
+                    self.register_buffer("principal_axesT", torch.transpose(masks_params["principal_axes"], 1, 2))
                     self.register_buffer("A_rot90", lie_tools.yrot(torch.tensor(-90)))
                     #scale change the original scale in render_size to the volume size after cropping
                     self.register_buffer("radius", masks_params["radii_bodies"]/self.vol_size)
                     log(f"decoder: com of bodies are {self.com_bodies}, rg of bodies are {self.radius*self.scale}, scale is {self.scale}")
-                    log(f"decoder: rotate_directions are {self.rotate_directions}, orient_bodies are {self.orient_bodies}")
+                    log(f"decoder: rotate_directions are {self.rotate_directions}")
+                    log(f"orient_bodies are {self.orient_bodies}")
+                    log(f"decoder: principal_axesT are {self.principal_axesT}")
                 self.template = ConvTemplate(in_dim=self.zdim, templateres=self.templateres, affine=True, num_bodies=self.num_bodies,
                                              z_affine_dim=self.z_affine_dim)
         else:
@@ -1348,6 +1407,13 @@ class VanillaDecoder(nn.Module):
         tail_z  = template.shape[-1] - head_z + 1
         #print(head, head_y, head_z, tail, tail_y, tail_z)
         assert head >=1 and head_y >=1 and head_z >=1 and head < tail and head_y < tail_y and head_z < tail_z
+        #tmp = template[:, :, head_z:tail_z, head_y:tail_y, head:tail]
+        ##print(template.shape)
+        #quantile = torch.quantile(template.view(template.shape[0], template.shape[1], -1), 0.985, dim=-1)
+        #quantile = quantile.abs().detach().unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        ##print(quantile, tmp.shape)
+        #l1norm = (tmp.abs() + 0.25*quantile).log()*quantile*1.25
+        #return l1norm
         return (template[:, :, head_z:tail_z, head_y:tail_y, head:tail]).abs()
 
     def total_variation(self, template, vol_bound=None, sqrt=True):
@@ -1491,10 +1557,10 @@ class VanillaDecoder(nn.Module):
                             t_i_3d = torch.cat([t_i, zero], dim=-1)/self.vol_size*self.scale #(n, 3)
                             if use_second_order:
                                 affine_grid_i, valid, trans_img = self.transformer.multi_sh_grid(rot_i, rot_resi_i, self.com_bodies/self.vol_size,
-                                                                             t_i_3d, body_trans_i, radius=self.radius, second_coeffs=affine[2][i, ...],)
+                                                                             t_i_3d, body_trans_i, radius=self.radius, second_coeffs=affine[2][i, ...], axes=self.principal_axesT)
                             else:
                                 affine_grid_i, valid, trans_img = self.transformer.multi_sh_grid(rot_i, rot_resi_i, self.com_bodies/self.vol_size,
-                                                                             t_i_3d, body_trans_i, radius=self.radius,)
+                                                                             t_i_3d, body_trans_i, radius=self.radius, axes=self.principal_axesT)
 
                             body_trans_pred.append(trans_img[..., :2]*self.vol_size/self.scale)
                             pos = self.transformer.rotate(rot_i)

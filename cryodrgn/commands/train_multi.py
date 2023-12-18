@@ -277,7 +277,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             ctf_param = ctf_params[ind.to(ctf_params.get_device())]
             freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/ctf_params[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
             #random_b = np.random.rand()*2.
-            random_b = np.random.gamma(1.5, 0.6)
+            random_b = np.random.gamma(1., 0.5)
             c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=args.bfactor + random_b).view(B,D-1,-1) #(B, )
 
     # encode
@@ -513,13 +513,14 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
 
     #print(losses["kldiv"].shape, losses["tvl2"].shape)
 
-    lamb = args.lamb * (1. - torch.exp(-torch.clamp((snr.detach()/0.01)**2, max=16))) #.5 #10 1 0.02
+    lamb = args.lamb * (1. - torch.exp(-torch.clamp((snr.detach()/0.02)**2, max=16))) * \
+                (1. - torch.exp(-torch.clamp((losses['l2'].mean().detach()/0.002)**2, max=16)))
     eps = 1e-3
     kld, mu2 = utils.compute_kld(z_mu, z_logstd)
     #cross_corr = utils.compute_cross_corr(z_mu)
-    loss = gen_loss + beta_control*beta*(kld)/mask_sum + 0.5*torch.mean(3e-1*losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
+    loss = gen_loss + beta_control*beta*(kld)/mask_sum + 0.5*torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
     if 'aff2' in losses:
-        loss = loss + 0.25*losses['aff2'].mean()/mask_sum
+        loss = loss + 0.5*losses['aff2'].mean()/mask_sum
     if body_poses_pred is not None:
         loss = loss #+ (rot_loss*body_rots_pred.shape[1] + tran_loss*body_trans_pred.shape[1])*4./mask_sum
     # compute mmd
@@ -875,6 +876,11 @@ def main(args):
             model_dict = model.encoder.state_dict()
             # 1. filter out unnecessary keys
             pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k}
+            for k in list(pretrained_dict.keys()):
+                if "mu" in k or "logstd" in k:
+                    if pretrained_dict[k].shape != model_dict[k].shape:
+                        print(k, pretrained_dict[k].shape, model_dict[k].shape)
+                        del pretrained_dict[k]
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict
@@ -885,8 +891,8 @@ def main(args):
             # 1. filter out unnecessary keys
             pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k and "radius" not in k}
             for k in list(pretrained_dict.keys()):
-                if "affine_head" in k or "second_order_head" in k:
-                    if pretrained_dict[k].shape[0] != model_dict[k].shape[0]:
+                if "affine_" in k or "second_order_head" in k:
+                    if pretrained_dict[k].shape != model_dict[k].shape:
                         print(k, pretrained_dict[k].shape, model_dict[k].shape)
                         del pretrained_dict[k]
             # 2. overwrite entries in the existing state dict
@@ -966,7 +972,7 @@ def main(args):
         snr_ema = 0.0025
         mse_ema = 0.01
         mse_var_ema = 0.1
-        mmd_ema = 0.
+        l1_ema = 0.0001
         mmd_var_ema = 0.1
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
@@ -990,7 +996,8 @@ def main(args):
             global_it = Nimg_train*epoch + batch_it
             save_image = (batch_it % (args.log_interval*4)) == 0
 
-            beta_control = args.beta_control*snr_ema
+            beta_control = args.beta_control*snr_ema * \
+                            (1. - np.exp(-(l1_ema/0.002)**2))
             beta = beta_schedule(global_it) * beta_max
 
             yr = torch.from_numpy(data.particles_real[ind.numpy()]).to(device) if args.use_real else None
@@ -1025,19 +1032,18 @@ def main(args):
 
             # logging
             # compute moving average of generator loss, snr, and mmd
-            delta         = snr - snr_ema
-            snr_ema += (1-ema_mu)*delta
-            delta         = gen_loss - gen_loss_ema
-            gen_loss_ema += (1-ema_mu)*delta
+            def moving_avg(ema, x):
+                delta = x - ema
+                return ema + (1-ema_mu)*delta, delta
+            snr_ema, delta = moving_avg(snr_ema, snr)
+            gen_loss_ema, delta = moving_avg(gen_loss_ema, gen_loss)
             gen_loss_var_ema = ema_mu*(gen_loss_var_ema + (1-ema_mu)*delta**2)
-            delta         = mse - mse_ema
-            mse_ema += (1-ema_mu)*delta
+            mse_ema, delta = moving_avg(mse_ema, mse)
             mse_var_ema = ema_mu*(mse_var_ema + (1-ema_mu)*delta**2)
-            delta         = mmd - mmd_ema
-            mmd_ema += (1-ema_mu)*delta
+            l1_ema, delta = moving_avg(l1_ema, l1_loss)
+
             mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
-            delta         = c_mmd - c_mmd_ema
-            c_mmd_ema += (1-ema_mu)*delta
+            c_mmd_ema, delta = moving_avg(c_mmd_ema, c_mmd)
             c_mmd_var_ema = ema_mu*(mmd_var_ema + (1-ema_mu)*delta**2)
 
             gen_loss_accum += gen_loss*B
@@ -1059,11 +1065,11 @@ def main(args):
             #                                        #mse_ema, np.sqrt(mse_var_ema)))#, mmd_ema, np.sqrt(mmd_var_ema), c_mmd_ema, np.sqrt(c_mmd_var_ema)))
             if batch_it % args.log_interval == 0:
                 if args.second_order:
-                    tqdm.write("Additional info at {}, l1={:.5f}, tv={:.5f}, snr={:.4f}, mse={:.4f}, gen_loss={:.5f}, aff2={:.3f}".format(
-                                        batch_it, l1_loss, tv_loss, snr_ema, mse_ema, gen_loss_ema, np.sqrt(aff2_loss)), file=sys.stdout)
+                    tqdm.write("Additional info at {}, l1={:.5f}, tv={:.5f}, snr={:.4f}, mse={:.4f}, gen_loss={:.5f}, aff2={:.3f}, bc={:.5f}".format(
+                                        batch_it, l1_ema, tv_loss, snr_ema, mse_ema, gen_loss_ema, np.sqrt(aff2_loss), beta_control), file=sys.stdout)
                 else:
-                    tqdm.write("Additional info at {}, l1={:.5f}, tv={:.5f}, snr={:.4f}, mse={:.4f}, gen_loss={:.5f}".format(
-                                        batch_it, l1_loss, tv_loss, snr_ema, mse_ema, gen_loss_ema), file=sys.stdout)
+                    tqdm.write("Additional info at {}, l1={:.5f}, tv={:.5f}, snr={:.4f}, mse={:.4f}, gen_loss={:.5f}, bc={:.5f}".format(
+                                        batch_it, l1_ema, tv_loss, snr_ema, mse_ema, gen_loss_ema, beta_control), file=sys.stdout)
             if batch_it % (args.log_interval*10) == 0:
                 out_z = '{}/z.{}.pkl'.format(args.outdir, epoch)
                 #log('save {}'.format(out_z))
