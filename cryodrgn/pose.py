@@ -191,8 +191,11 @@ class PoseTracker(nn.Module):
         if encodings.shape[-1] > self.deform_emb_size:
             if self.multi_mu is None:
                 #initialize multi mu
-                log(f"intializing multi_mu of {len(self.mu)}")
                 self.multi_mu = torch.randn(len(self.mu), encodings.shape[-1] - self.deform_emb_size)
+                log(f"intializing multi_mu of {len(self.mu)}, {self.multi_mu.shape[-1]}")
+            if self.multi_mu.shape[-1] != encodings.shape[-1] - self.deform_emb_size:
+                self.multi_mu = torch.randn(len(self.mu), encodings.shape[-1] - self.deform_emb_size)
+                log(f"reintializing multi_mu of {len(self.mu)}, {self.multi_mu.shape[-1]}")
             self.mu[ind] = self.mu[ind]*mu + (1-mu)*encodings[:, :self.deform_emb_size].detach().cpu()
             self.multi_mu[ind] = self.multi_mu[ind]*mu + (1-mu)*encodings[:, self.deform_emb_size:].detach().cpu()
         else:

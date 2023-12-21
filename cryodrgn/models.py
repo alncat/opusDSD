@@ -1099,7 +1099,7 @@ class VanillaDecoder(nn.Module):
                     self.register_buffer("com_bodies", masks_params["com_bodies"])
                     self.register_buffer("orient_bodies", masks_params["orient_bodies"])
                     self.register_buffer("orient_bodiesT", torch.transpose(masks_params["orient_bodies"], 1, 2))
-                    #self.register_buffer("principal_axes", masks_params["principal_axes"])
+                    self.register_buffer("principal_axes", masks_params["principal_axes"])
                     self.register_buffer("principal_axesT", torch.transpose(masks_params["principal_axes"], 1, 2))
                     self.register_buffer("A_rot90", lie_tools.yrot(torch.tensor(-90)))
                     #scale change the original scale in render_size to the volume size after cropping
@@ -1541,6 +1541,7 @@ class VanillaDecoder(nn.Module):
                             global_trans_i = affine[1][i, self.num_bodies:, ...]
                             #print(rot_resi_i, body_trans_i)
                             rot_resi_i = self.orient_bodiesT @ rot_resi_i[:self.num_bodies, ...] @ self.orient_bodies
+                            #rot_resi_i = self.principal_axesT @ rot_resi_i[:self.num_bodies, ...] @ self.principal_axes
                             # rotate com according to rotate direction
                             body_trans_i = self.orient_bodiesT @ body_trans_i[:self.num_bodies, ...] @ self.orient_bodies
                             body_trans_i = (body_trans_i @ self.rotate_directions.unsqueeze(-1)) - self.rotate_directions.unsqueeze(-1)

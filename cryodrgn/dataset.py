@@ -12,7 +12,7 @@ from . import starfile
 
 log = utils.log
 
-def load_particles(mrcs_txt_star, lazy=False, datadir=None, relion31=False):
+def load_particles(mrcs_txt_star, lazy=False, datadir=None, relion31=False, return_header=False):
     '''
     Load particle stack from either a .mrcs file, a .star file, a .txt file containing paths to .mrcs files, or a cryosparc particles.cs file
 
@@ -33,8 +33,11 @@ def load_particles(mrcs_txt_star, lazy=False, datadir=None, relion31=False):
     elif mrcs_txt_star.endswith('.cs'):
         particles = starfile.csparc_get_particles(mrcs_txt_star, datadir, lazy)
     else:
-        particles, _ = mrc.parse_mrc(mrcs_txt_star, lazy=lazy)
-    return particles
+        particles, header = mrc.parse_mrc(mrcs_txt_star, lazy=lazy)
+    if not return_header:
+        return particles
+    else:
+        return particles, header
 
 
 class LazyMRCData(data.Dataset):
@@ -210,11 +213,11 @@ class VolData(data.Dataset):
     Class representing an .mrcs stack file
     '''
     def __init__(self, mrcfile, norm=None, invert_data=False, datadir=None, relion31=False, max_threads=16, window_r=0.85):
-        particles = load_particles(mrcfile, False, datadir=datadir, relion31=relion31)
+        particles, header = load_particles(mrcfile, False, datadir=datadir, relion31=relion31, return_header=True)
         N, ny, nx = particles.shape
         assert N == ny == nx, "Images must be cubic"
         assert ny % 2 == 0, "Image size must be even"
-        log('Loaded {} {}x{} images'.format(N, ny, nx))
+        log('Loaded {}x{}x{} images with Apix {}'.format(N, ny, nx, header.get_apix()))
 
         if invert_data: particles *= -1
 
@@ -230,6 +233,7 @@ class VolData(data.Dataset):
         self.N = N
         self.D = particles.shape[1] # ny
         self.norm = norm
+        self.Apix = header.get_apix()
 
     def __len__(self):
         return self.N

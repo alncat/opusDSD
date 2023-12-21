@@ -181,8 +181,9 @@ def main(args):
         radii.append(r)
         axes.append(eigvecs)
 
+    print("radii_bodies from masks: ", radii)
     masks = torch.stack(masks, dim=0)
-    masks = (masks > 0)*masks
+    masks = (masks > 1e-3)*masks
     vol_coms = None
     rot_radii = None
     if args.volumes:
@@ -195,8 +196,22 @@ def main(args):
             vols.append(ref_vol.get())
             if b_i == 0:
                 #interpolate mask
-                scale = masks.shape[-1]/vols[-1].shape[-1]
-                # TODO: actually, the volumes are cropped, but masks are not cropped
+                #scale = masks.shape[-1]/vols[-1].shape[-1]
+                #assert args.D == masks.shape[-1]
+                #scale = args.D/vols[-1].shape[-1]
+                #scale_apix = ref_vol.Apix/args.Apix
+                # TODO: the volumes are cropped, but masks of full size are not cropped
+                print(f"need to resample masks from {args.Apix} to {ref_vol.Apix}")
+                print(f"mask length {args.D*args.Apix}, volume length {vols[-1].shape[-1]*ref_vol.Apix}")
+                crop_size = int((args.D*args.Apix - vols[-1].shape[-1]*ref_vol.Apix)/args.Apix)//2
+                if masks.shape[-1] == args.D:
+                    print(f"need to crop masks by {crop_size}")
+                    masks = masks[:, crop_size:args.D-crop_size, crop_size:args.D-crop_size, crop_size:args.D-crop_size]
+                    assert masks.shape[-1] == args.D - crop_size*2
+                print(f"mask shape after cropping {masks.shape}")
+                #scale = masks.shape[-1]/vols[-1].shape[-1]
+                scale = (args.D - crop_size*2)/vols[-1].shape[-1]
+                print(f"rescale the coordinates by {scale}")
                 masks = F.interpolate(masks.unsqueeze(0), vols[-1].shape, mode='trilinear').squeeze()
                 print(masks.sum(dim=(1,2,3)))
 
@@ -212,7 +227,7 @@ def main(args):
             c0 *= scale
             c1 *= scale
             print(r0*scale, r1*scale)
-            print(p1@p0.T)
+            #print(p1@p0.T)
             c0s.append(c0)
             c1s.append(c1)
             #print(c0, c1)
@@ -236,6 +251,7 @@ def main(args):
             r1 = F.normalize(r1, dim=0)
             mat = torch.stack([r0, r1, rot_axis], dim=0)
             orientations.append(mat)
+            print(mat@principal_axes[m_i].T)
             if m_i == origin_rel:
                 rot_radii.append(vol_coms[m_i] - vol_coms[m_i])
             else:
@@ -250,8 +266,6 @@ def main(args):
         rot_radii = torch.stack(rot_radii, dim=0)
         vol_coms = torch.stack(vol_coms, dim=0)
         principal_axes = torch.stack(principal_axes, dim=0)
-        print("translation orientations determined from volume series: ", orientations)#, principal_axes)
-        print("principal_axes: ", principal_axes)
 
     consensus_mask = masks.mean(dim=0)
     #weights = F.softmax(masks*4, dim=0)
@@ -266,8 +280,8 @@ def main(args):
     orient_bodies = []
     relats = []
     print("in_relatives: ", in_relatives)
-    print("com_bodies: ", com_bodies, " vol_coms: ", vol_coms)
-    #print("com_bodies: ", com_bodies - vol_coms, "radii_bodies: ", radii_bodies)
+    print("coms computed from masks: ", com_bodies,)
+    print("coms computed from volumes: ", vol_coms)
     origin_rel = np.bincount(in_relatives).argmax()
     for b_i in range(len(s_mask.df)):
         rotate_directions.append(com_bodies[in_relatives[b_i]] - com_bodies[b_i])
@@ -287,14 +301,15 @@ def main(args):
     #print((orientations@rotate_directions_ori.unsqueeze(-1)).squeeze(), rot_axes, orientations)
     #print((orientations@rot_radii.unsqueeze(-1)).squeeze())
     #print(orientations@torch.transpose(principal_axes, -1, -2))
-    print("rot_radii using volumes: ", rot_radii)
     orient_bodies = torch.stack(orient_bodies, dim=0)
     relats = torch.stack(relats, dim=0)
     axes = torch.stack(axes, dim=0)
     #print("A_rot90: ", A_rot90)
     #print("relats: ", relats)
-    print("rotate_directions using mask centers: ", rotate_directions_ori)
-    print("orient_bodies which aligns difference of coms to z axis: ", orient_bodies)
+    print("rotate_directions determined by masks: ", rotate_directions_ori)
+    print("orient_bodies for translation by aligning difference of coms to z axis: ", orient_bodies)
+    print("principal_axes from masks: ", axes)
+    #print("radii_bodies from masks: ", radii_bodies)
     output_name = prefix + f"/{args.outmasks}.pkl"
     log(f'Writing parameters to {output_name}')
     if not args.volumes:
@@ -303,6 +318,10 @@ def main(args):
     #            #"weights": weights, "consensus_mask": consensus_mask},
                output_name)
     else:
+        print("rotate_directions using volumes: ", rot_radii)
+        print("orient_bodies for translation determined from volume series: ", orientations)
+        print("principal_axes from volumes: ", principal_axes)
+        print("radii_bodies from volumes: ", radii_bodies)
         torch.save({"in_relatives": relats, "com_bodies": vol_coms,
                 "orient_bodies": orientations, "rotate_directions": rot_radii, "radii_bodies": radii_bodies, "principal_axes": principal_axes,},  \
                 #"weights": weights, "consensus_mask": consensus_mask},

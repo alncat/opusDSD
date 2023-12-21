@@ -277,7 +277,7 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             ctf_param = ctf_params[ind.to(ctf_params.get_device())]
             freqs = ctf_grid.freqs2d.view(-1, 2).unsqueeze(0)/ctf_params[0,0].view(1,1,1) #(1, (-x+1, x)*x, 2)
             #random_b = np.random.rand()*2.
-            random_b = np.random.gamma(1., 0.5)
+            random_b = np.random.gamma(0.8, 0.5)
             c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=args.bfactor + random_b).view(B,D-1,-1) #(B, )
 
     # encode
@@ -875,12 +875,13 @@ def main(args):
             pretrained_dict = checkpoint['encoder_state_dict']
             model_dict = model.encoder.state_dict()
             # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k}
+            #pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k}
             for k in list(pretrained_dict.keys()):
-                if "mu" in k or "logstd" in k:
-                    if pretrained_dict[k].shape != model_dict[k].shape:
+                #if "mu" in k or "logstd" in k:
+                if k not in model_dict or pretrained_dict[k].shape != model_dict[k].shape:
+                    if k in model_dict:
                         print(k, pretrained_dict[k].shape, model_dict[k].shape)
-                        del pretrained_dict[k]
+                    del pretrained_dict[k]
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict
@@ -889,12 +890,13 @@ def main(args):
             pretrained_dict = checkpoint['decoder_state_dict']
             model_dict = model.decoder.state_dict()
             # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k and "radius" not in k}
+            #pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k and "radius" not in k}
             for k in list(pretrained_dict.keys()):
-                if "affine_" in k or "second_order_head" in k:
-                    if pretrained_dict[k].shape != model_dict[k].shape:
+                #if "affine_" in k or "second_order_head" in k:
+                if k not in model_dict or pretrained_dict[k].shape != model_dict[k].shape:
+                    if k in model_dict:
                         print(k, pretrained_dict[k].shape, model_dict[k].shape)
-                        del pretrained_dict[k]
+                    del pretrained_dict[k]
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict

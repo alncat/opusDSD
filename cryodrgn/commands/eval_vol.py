@@ -168,12 +168,13 @@ def main(args):
             pretrained_dict = checkpoint['decoder_state_dict']
             model_dict = model.decoder.state_dict()
             # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
+            #pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
             for k in list(pretrained_dict.keys()):
-                if "affine_head" in k or "second_order_head" in k:
-                    if pretrained_dict[k].shape != model_dict[k].shape:
+                #if "affine_head" in k or "second_order_head" in k:
+                if k not in model_dict or pretrained_dict[k].shape != model_dict[k].shape:
+                    if k in model_dict:
                         print(k, pretrained_dict[k].shape, model_dict[k].shape)
-                        del pretrained_dict[k]
+                    del pretrained_dict[k]
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
             # 3. load the new state dict
