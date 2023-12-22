@@ -19,6 +19,10 @@ This repository contains the implementation of opus-deep structural disentanglem
 Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6.  An exemplar movie of the OPUS-DSD2 is shown below:
 
 
+https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
+
+
+
 This program is built upon a set of great works:
 - [cryoDRGN](https://github.com/zhonge/cryodrgn)
 - [Neural Volumes](https://stephenlombardi.github.io/projects/neuralvolumes/)
