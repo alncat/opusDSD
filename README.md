@@ -16,7 +16,7 @@ Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
 The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data during structural disentanglement!
-OPUS-DSD2 can disentangle not only 3D structural information, but also reconstruct physically meaningful dynamics for the macromolecules.
+OPUS-DSD2 can not only disentangle 3D structural information by reconstructing different conformations, but also reconstruct physically meaningful dynamics for the macromolecules.
 
 This program is built upon a set of great works:
 - [cryoDRGN](https://github.com/zhonge/cryodrgn)
@@ -31,7 +31,7 @@ An informative latent space is pivotal as it simplifies data analysis by providi
 
 Our approach strategically **leverages the inevitable pose assignment errors introduced during consensus refinement, while concurrently mitigating their impact on the quality of 3D reconstructions**. Although it might seem paradoxical to exploit errors while minimizing their effects, our method has proven effective in achieving this delicate balance.
 
-The workflow of this method is demonstrated as follows:
+The workflow of OPUS-DSD is demonstrated as follows:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/workflow.png?raw=true "Opus-DSD Workflow")
 
@@ -190,12 +190,13 @@ Suppose you download the spliceosome dataset. You can prepare a particle stack n
 
 Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
-**Composition and Dynamics Disentanglement**
+**Data Preparation for Composition and Dynamics Disentanglement**
 
 OPUS-DSD2 features a new capacity to reconstruct multi-body dynamics and resolving compositional heterogeniety. 
 Reconstructing multibody dynamics in OPUS-DSD2 is very similar to Relion's multibody refinement protocol though the underlying dynamics model is different (You can see the details 
-in the preprint). First of all, you shall create a set of masks following Relion's multibody refinement protocol. 
-The detailed process for creating masks can be found in https://www.cryst.bbk.ac.uk/embo2019/pracs/RELION%20practical%20EMBO%202019_post%20practice.pdf . 
+in the preprint). First of all, you shall create a set of masks following Relion's multibody refinement protocol. You can find examples about masks and input starfile for
+the multibody refinement of spliceosome in https://empiar.pdbj.org/entry/10180/.
+There is also a tutorial with detailed process for creating masks in https://www.cryst.bbk.ac.uk/embo2019/pracs/RELION%20practical%20EMBO%202019_post%20practice.pdf . 
 The segment map tool in ChimeraX is also perfect for creating segmentations.
 
 After the masks and the starfile for multibody refinement are created, you can prepare the pkls for multibody dynamics estimation by executing
@@ -205,7 +206,9 @@ dsdsh prepare_multi starfile D apix masks numb --volumes VOLUMES
 ```
 The details about each argument can be checked using ```dsdsh prepare_multi -h```
 The prepare_multi commands will create a pkl file that contains the parameters of defined bodies, which will be ***stored in the same directory 
-as the starfile***.
+as the starfile***. OPUS-DSD2 will read the reference body of each body from the starfile, the body will be translated according to ```_rlnBodyRotateRelativeTo``` body.
+But you should note that the index of body starts from 1. The body that serves as the reference body for other bodies with the highest frequencies will be 
+selected as the center body and is free from translation.
 
 After executing these steps, you have all pkls and files required for running opus-DSD2.
 
@@ -312,12 +315,12 @@ The analysis result will be stored in /work/sp/analyze.16, i.e., the output dire
 After executing the above command once, you may skip the lengthy umap embedding laterly by appending ```--skip-umap``` to the command in analyze.sh. Our analysis script will read the pickled umap embeddings directly.
 The eval_vol command has following options,
 
-If the model is trained with multi-body dynamics, we have a mode, eval_vol, to reconstruct the 
+If the model is trained by fitting multi-body dynamics, we have a mode, eval_vol, to reconstruct the 
 multi-body dynamics, using the command
 ```
 dsdsh eval_vol resdir N dpc num apix --masks MASKS --kmeans KMEANS --dfk DFK
 ```
-we select DFK cluster from the kmeans{KMEANS} folder as the template volume, which will be deformed according to the dynamics defined by the PC{dpc} of the dynamics latent space. Details about each argument can be checked using ```dsdsh eval_vol -h```
+This command selects the DFK class from the kmeans{KMEANS} folder as the template volume, which will be deformed according to the dynamics defined by the PC{dpc} of the dynamics latent space. The generated volumes show the dynamics on the selected class along the selected PC. Details about each argument can be checked using ```dsdsh eval_vol -h```
 
 
 You can either generate the volume which corresponds to KMeans cluster centroid or traverses the principal component using,
