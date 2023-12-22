@@ -191,11 +191,13 @@ Suppose you download the spliceosome dataset. You can prepare a particle stack n
 
 Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
-**Structural and Dynamics Disentanglement**
+**Composition and Dynamics Disentanglement**
 
-To estimate multibody dynamics, you can create a set of masks following Relion's multibody refinement protocol. 
+OPUS-DSD2 features a new capacity to reconstruct multi-body dynamics and resolving compositional heterogeniety. 
+Reconstructing multibody dynamics in OPUS-DSD2 is very similar to Relion's multibody refinement protocol though the underlying dynamics model is different (You can see the details 
+in the preprint). First of all, you shall create a set of masks following Relion's multibody refinement protocol. 
 The detailed process for creating masks can be found in https://www.cryst.bbk.ac.uk/embo2019/pracs/RELION%20practical%20EMBO%202019_post%20practice.pdf . 
-The segment map tools in ChimeraX is also perfect for defining masks.
+The segment map tool in ChimeraX is also perfect for creating segmentations.
 
 After the masks and the starfile for multibody refinement are created, you can prepare the pkls for multibody dynamics estimation by executing
 
@@ -203,8 +205,10 @@ After the masks and the starfile for multibody refinement are created, you can p
 dsdsh prepare_multi starfile D apix masks numb --volumes VOLUMES
 ```
 The details about each argument can be checked using ```dsdsh prepare_multi -h```
-The prepare_multi commands will create a pkl file that contains the 
-After executing all these steps, you have all pkls and files required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
+The prepare_multi commands will create a pkl file that contains the parameters of defined bodies, which will be ***stored in the same directory 
+as the starfile***.
+
+After executing these steps, you have all pkls and files required for running opus-DSD2.
 
 
 # training <a name="training"></a>
@@ -269,11 +273,16 @@ both are in the output directory
 
 During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. By default, opus-DSD reads all images into memory before training, so it may require some more host memories **To disable this behavior, you can include ```--notinmem``` into the training command**.
 
-To reconstruct the multi-body dynamics, you should use the command ```dsd train_multi```, using ```dsd train_multi -h``` to check more details. Tho enbale dynamics reconstruction, you must specify ```--masks``` to load the mask pkl with the parameters for each body. An example command is as below:
+To reconstruct the multi-body dynamics, you should use the command ```dsd train_multi```, using ```dsd train_multi -h``` to check more details. Tho enbale dynamics reconstruction, you shall specify ```--masks``` to load the mask pkl with the parameters for each body. An example command is as below:
 ```
 dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_euler.pkl -n 20 -b 13 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/MaskCreate/job001/mask.mrc --split /work/pkls/sa-split.pkl --lamb 1.5 --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/mask_params.pkl --zaffdim 6 --load ../dsd/weights.5.pkl --latents ../dsd/z.5.pkl --plot
 ```
-If you donot include ```--masks``` in the training command, OPUS-DSD2 will only estimate a global pose correction.
+| argument |  explanation |
+| --- | --- |
+| --zaffdim | controls the dimension of dynamics latent space |
+| --masks | the pkl file contains the parameters for bodies of the macromolecule|
+
+If you omit ```--masks``` in the train_multi command, OPUS-DSD2 will estimate a global pose correction instead.
 
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in ```dsdsh``` to visualize the learned latent space! The analysis procedure is detailed as following.
