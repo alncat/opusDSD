@@ -17,7 +17,7 @@ https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b11
 
 The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data during structural disentanglement!
 OPUS-DSD2 can not only disentangle 3D structural information by reconstructing different conformations, but also reconstruct physically meaningful dynamics for the macromolecules.
-This new function is very easy to use if you have already be familiar with Relion's multi-body refinement. OPUS-DSD2 takes the inputs files of Relion's multi-body refinement,
+This new function is very easy to use if you have already be familiar with Relion's multi-body refinement. OPUS-DSD2 takes the input files of Relion's multi-body refinement,
 then performs ***structural disentanglement and multi-body dynamics fitting*** simultaneously and end-to-end!
 
 This program is built upon a set of great works:
@@ -182,9 +182,9 @@ dsdsh prepare /work/consensus_data.star 320 1.699 --relion31
  - $3 specifies the angstrom per pixel of image
  - $4 indicates the version of starfile, only include --relion31 if the file version is higher than 3.0
 
-**The pose pkl can be found as /work/consensus_data_pose_euler.pkl, and the ctf pkl can be found as /work/consensus_data_ctf.pkl**
+**The pose and ctf pkls can be found in the same directory of the starfile, in this case, the pose pkl is /work/consensus_data_pose_euler.pkl, and the ctf pkl is /work/consensus_data_ctf.pkl**
 
-Suppose you download the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
+Next, you need to prepare a image stack. Suppose you have downloaded the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
 
 ```relion_stack_create --i consensus_data.star --o all --one_by_one```
 
