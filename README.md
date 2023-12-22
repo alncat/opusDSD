@@ -17,6 +17,8 @@ https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b11
 
 The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data during structural disentanglement!
 OPUS-DSD2 can not only disentangle 3D structural information by reconstructing different conformations, but also reconstruct physically meaningful dynamics for the macromolecules.
+This new function is very easy to use if you have already be familiar with Relion's multi-body refinement. OPUS-DSD2 takes the inputs files of Relion's multi-body refinement,
+then performs ***structural disentanglement and multi-body dynamics fitting*** simultaneously and end-to-end!
 
 This program is built upon a set of great works:
 - [cryoDRGN](https://github.com/zhonge/cryodrgn)
