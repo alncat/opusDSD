@@ -1,18 +1,12 @@
 # Table of contents
-1. [Movie example](#umap)
 2. [Opus-DSD](#opusdsd)
-    1. [80S ribosome](#80s)
-    2. [Spliceosome](#splice)
-3. [setup environment](#setup)
-4. [prepare data](#preparation)
-5. [training](#training)
-6. [analyze result](#analysis)
-
-# Movie of the PC1 of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
-The movie of 80 ribosome along PC1
-
-https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-aabb-5d38a58cb7dd.mp4
-
+    1. [Movie example](#umap)
+    2. [80S ribosome](#80s)
+    3. [Spliceosome](#splice)
+4. [setup environment](#setup)
+5. [prepare data](#preparation)
+6. [training](#training)
+7. [analyze result](#analysis)
 
 # Opus-DSD2 <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
@@ -21,7 +15,7 @@ Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at
 
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
-
+The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data during structural disentanglement!
 
 This program is built upon a set of great works:
 - [cryoDRGN](https://github.com/zhonge/cryodrgn)
@@ -50,6 +44,10 @@ The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In thi
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
+# Movie of the PC1 of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
+The movie of 80 ribosome along PC1
+
+https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-aabb-5d38a58cb7dd.mp4
 ## 80S ribosome <a name="80s"></a>
 The weight file can be downloaded from https://www.icloud.com/iclouddrive/0fab8AGmWkNjCsxVpasi-XsGg#weights.
 The other pkls for visualzing are deposited at https://drive.google.com/drive/folders/1D0kIP3kDhlhRx12jVUsZUObfHxsUn6NX?usp=share_link.
