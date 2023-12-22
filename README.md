@@ -15,11 +15,12 @@ https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-a
 
 
 # Opus-DSD <div id="opusdsd">
-This repository contains the implementation of opus-deep structural disentanglement (DSD), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The publication of this method is available at https://www.nature.com/articles/s41592-023-02031-6. There is a program on codeocean https://codeocean.com/capsule/9350896/tree/v1 for testing its inference. ***A newer version with better reconstruction quality is available upon request.*** An exemplar movie of the mentioned new version is shown below:
+This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
+Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6.  An exemplar movie of the OPUS-DSD2 is shown below:
 
 
-https://github.com/alncat/opusDSD/assets/3967300/810e85cc-445f-4e8c-bfde-e78fe87ec443
+https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
+
 
 
 This program is built upon a set of great works:
@@ -114,15 +115,23 @@ This program is developed based on cryoDRGN and adheres to a similar data prepar
 
 **Usage Example:**
 
-In overall, the commands in OPUS-DSD can be invoked by calling
+In overall, the commands for training in OPUS-DSD can be invoked by calling
 ```
 dsd commandx ...
+```
+while the commands for result analysis can be accessed by calling
+```
+dsdsh commandx ...
 ```
 
 More information about each argument of the command can be displayed using
 
 ```
-dsd commandx -h
+dsd commandx -h 
+```
+or
+```
+dsdsh commandx -h
 ```
 
 OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image stack are stored as the python pickle files, aka pkl. Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**,
@@ -145,6 +154,18 @@ Next, you can convert STAR to the ctf pkl file by executing:
 ```
 dsd parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl
 ```
+
+positional arguments:
+  starfile           starfile for refinement
+  D                  the size of image in the input stack
+  apix               the apix of the input stack
+  masks              starfile storing masks for multi-body refinement
+  numb               the number of rigid-bodies for multi-body refinement
+
+optional arguments:
+  -h, --help         show this help message and exit
+  --volumes VOLUMES  the path to the volume series generated according to PCA
+  --relion31         if the input starfile is of version 3.1
 
 For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 to the command!
 
@@ -170,6 +191,19 @@ Suppose you download the spliceosome dataset. You can prepare a particle stack n
 
 Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
+**Structural and Dynamics Disentanglement**
+
+To estimate multibody dynamics, you can create a set of masks following Relion's multibody refinement protocol. 
+The detailed process for creating masks can be found in https://www.cryst.bbk.ac.uk/embo2019/pracs/RELION%20practical%20EMBO%202019_post%20practice.pdf . 
+The segment map tools in ChimeraX is also perfect for defining masks.
+
+After the masks and the starfile for multibody refinement are created, you can prepare the pkls for multibody dynamics estimation by executing
+
+```
+dsdsh prepare_multi starfile D apix masks numb --volumes VOLUMES
+```
+The details about each argument can be checked using ```dsdsh prepare_multi -h```
+The prepare_multi commands will create a pkl file that contains the 
 After executing all these steps, you have all pkls and files required for running opus-DSD in the program directory ( You can specify any directories you like in the command arguments ).
 
 
@@ -209,7 +243,7 @@ The functionality of each argument is explained in the table:
 | --tmp-prefix | the prefix of intermediate reconstructions, default value is ```tmp```. OPUS-DSD will output temporary reconstructions to the root directory of this program when training, whose names are ```$tmp-prefix.mrc``` |
 | --notinmem | include this arguement to let OPUS-DSD reading image stacks from hard disk during training, this is helpful when a huge dataset cannot fit in the memory |
 
-The plot mode will display the following images:
+The plot mode will ouput the following images in the directory where you issued the training command:
 
 <img width="553" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/68c08944-d096-42a2-bc2f-ec18584f319e">
 
@@ -235,8 +269,14 @@ both are in the output directory
 
 During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. By default, opus-DSD reads all images into memory before training, so it may require some more host memories **To disable this behavior, you can include ```--notinmem``` into the training command**.
 
+To reconstruct the multi-body dynamics, you should use the command ```dsd train_multi```, using ```dsd train_multi -h``` to check more details. Tho enbale dynamics reconstruction, you must specify ```--masks``` to load the mask pkl with the parameters for each body. An example command is as below:
+```
+dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_euler.pkl -n 20 -b 13 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/MaskCreate/job001/mask.mrc --split /work/pkls/sa-split.pkl --lamb 1.5 --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/mask_params.pkl --zaffdim 6 --load ../dsd/weights.5.pkl --latents ../dsd/z.5.pkl --plot
+```
+If you donot include ```--masks``` in the training command, OPUS-DSD2 will only estimate a global pose correction.
+
 # analyze result <a name="analysis"></a>
-You can use the analysis scripts in opusDSD/analysis_scripts to visualizing the learned latent space! The analysis procedure is detailed as following.
+You can use the analysis scripts in ```dsdsh``` to visualize the learned latent space! The analysis procedure is detailed as following.
 
 The analysis scripts can be invoked by calling command like
 ```
@@ -262,6 +302,15 @@ dsdsh analyze /work/sp 16 4 16
 The analysis result will be stored in /work/sp/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in /work/sp/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in /work/sp/analyze.16/umap.png .
 
 After executing the above command once, you may skip the lengthy umap embedding laterly by appending ```--skip-umap``` to the command in analyze.sh. Our analysis script will read the pickled umap embeddings directly.
+The eval_vol command has following options,
+
+If the model is trained with multi-body dynamics, we have a mode, eval_vol, to reconstruct the 
+multi-body dynamics, using the command
+```
+dsdsh eval_vol resdir N dpc num apix --masks MASKS --kmeans KMEANS --dfk DFK
+```
+we select DFK cluster from the kmeans{KMEANS} folder as the template volume, which will be deformed according to the dynamics defined by the PC{dpc} of the dynamics latent space. Details about each argument can be checked using ```dsdsh eval_vol -h```
+
 
 You can either generate the volume which corresponds to KMeans cluster centroid or traverses the principal component using,
 (you can check the content of script first, there are two commands, one is used to evaluate volume at kmeans center, another one is for PC traversal, just choose one according to your use case)
@@ -286,6 +335,7 @@ You can use
 dsdsh eval_vol /work/sp 16 pc 1 2.2
                 $1      $2 $3 $4 $5
 ```
+
 
 to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's ```vseries``` feature.
 **PCs are great for visualizing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
