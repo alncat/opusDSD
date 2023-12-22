@@ -1,5 +1,5 @@
 # Table of contents
-2. [Opus-DSD](#opusdsd)
+2. [Opus-DSD2](#opusdsd)
     1. [Movie example](#umap)
     2. [80S ribosome](#80s)
     3. [Spliceosome](#splice)
@@ -16,6 +16,7 @@ Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
 The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data during structural disentanglement!
+OPUS-DSD2 can disentangle not only 3D structural information, but also reconstruct physically meaningful dynamics for the macromolecules.
 
 This program is built upon a set of great works:
 - [cryoDRGN](https://github.com/zhonge/cryodrgn)
