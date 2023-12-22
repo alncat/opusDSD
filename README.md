@@ -14,7 +14,7 @@ The movie of 80 ribosome along PC1
 https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-aabb-5d38a58cb7dd.mp4
 
 
-# Opus-DSD <div id="opusdsd">
+# Opus-DSD2 <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6.  An exemplar movie of the OPUS-DSD2 is shown below:
 
