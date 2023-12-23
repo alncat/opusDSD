@@ -40,7 +40,8 @@ def center_of_mass(volume):
     eigvals, eigvecs = np.linalg.eig(matrix.numpy())
     indices = np.argsort(eigvals)
     #print(matrix, eigvals[indices])
-    eigvecs = torch.from_numpy(eigvecs[:, indices].T) # eigvecs[0] is the first eigen vector with largest eigenvalues
+    eigvecs = torch.from_numpy(eigvecs[:, indices].T) # eigvecs[0] is the first eigen vector with smallest eigenvalues
+    eigvals = eigvals[indices]
     #print("matrix @ eigvecs", matrix, eigvecs @ matrix @ eigvecs.T)
     new_coords = (centered)@eigvecs.T
     new_coords = -new_coords.unsqueeze(-1) * (centered @ eigvecs.T).unsqueeze(-2)
