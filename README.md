@@ -135,6 +135,52 @@ or
 dsdsh commandx -h
 ```
 
+**Data Preparation for OPUS-DSD Using ```dsdsh prepare```:**
+
+There is a command ```dsdsh prepare``` for data preparation. Under the hood, ```dsdsh prepare``` points to the prepare.sh inside analysis_scripts. Suppose **the version of star file is 3.1**, the above process can be simplified as,
+```
+dsdsh prepare /work/consensus_data.star 320 1.699 --relion31
+                $1                      $2    $3    $4
+```
+ - $1 specifies the path of the starfile,
+ - $2 specifies the dimension of image
+ - $3 specifies the angstrom per pixel of image
+ - $4 indicates the version of starfile, only include --relion31 if the file version is higher than 3.0
+
+**The pose and ctf pkls can be found in the same directory of the starfile, in this case, the pose pkl is /work/consensus_data_pose_euler.pkl, and the ctf pkl is /work/consensus_data_ctf.pkl**
+
+Next, you need to prepare a image stack. Suppose you have downloaded the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
+
+```relion_stack_create --i consensus_data.star --o all --one_by_one```
+
+***Sometimes after running some protocols in Relion using all.star, Relion might sort the order of images in the corresponding output starfile. You should make sure that the output starfile and the input all.star have the same order of images, thus the output starfile have the correct parameters for the images in all.mrcs!***
+
+Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
+
+**Data Preparation for OPUS-DSD2 with Composition and Dynamics Disentanglement**
+
+OPUS-DSD2 features a new capacity to reconstruct multi-body dynamics and resolving compositional heterogeniety. 
+Reconstructing multibody dynamics in OPUS-DSD2 is very similar to Relion's multibody refinement protocol though the underlying dynamics model is different (You can see the details 
+in the preprint). First of all, you shall create a set of masks following Relion's multibody refinement protocol. You can find examples about masks and input starfile for
+the multibody refinement of spliceosome in https://empiar.pdbj.org/entry/10180/.
+There is also a tutorial with detailed process for creating masks in https://www.cryst.bbk.ac.uk/embo2019/pracs/RELION%20practical%20EMBO%202019_post%20practice.pdf . 
+The segment map tool in ChimeraX is also perfect for creating segmentations.
+
+After the masks and the starfile for multibody refinement are created, you can prepare the pkls for multibody dynamics estimation by executing
+
+```
+dsdsh prepare_multi starfile D apix masks numb --volumes VOLUMES
+```
+The details about each argument can be checked using ```dsdsh prepare_multi -h```
+The prepare_multi commands will create a pkl file that contains the parameters of defined bodies, which will be ***stored in the same directory 
+as the starfile***. OPUS-DSD2 will read the reference body of each body from the starfile, the body will be translated according to ```_rlnBodyRotateRelativeTo``` body.
+But you should note that the index of body starts from 1. The body that serves as the reference body for other bodies with the highest frequencies will be 
+selected as the center body and is free from translation.
+
+After executing these steps, you have all pkls and files required for running opus-DSD2.
+
+**Data preparation under the hood**
+
 OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image stack are stored as the python pickle files, aka pkl. Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**,
 and the consensus_data.star is located at ```/work/``` directory, you can convert STAR to the pose pkl file **inside the opusDSD source folder** by executing the command below:
 
@@ -156,63 +202,8 @@ Next, you can convert STAR to the ctf pkl file by executing:
 dsd parse_ctf_star /work/consensus_data.star -D 320 --Apix 1.699 -o sp-ctf.pkl
 ```
 
-positional arguments:
-  starfile           starfile for refinement
-  D                  the size of image in the input stack
-  apix               the apix of the input stack
-  masks              starfile storing masks for multi-body refinement
-  numb               the number of rigid-bodies for multi-body refinement
-
-optional arguments:
-  -h, --help         show this help message and exit
-  --volumes VOLUMES  the path to the volume series generated according to PCA
-  --relion31         if the input starfile is of version 3.1
-
 For **the RELION STAR file with version hgiher than 3.0**, you should add --relion31 to the command!
 
-**Simple Data Preparation Using ```dsdsh prepare```:**
-
-There is a command ```dsdsh prepare``` which combine both process. Under the hood, ```dsdsh prepare``` points to the prepare.sh inside analysis_scripts. Suppose **the version of star file is 3.1**, the above process can be simplified as,
-```
-dsdsh prepare /work/consensus_data.star 320 1.699 --relion31
-                $1                      $2    $3    $4
-```
- - $1 specifies the path of the starfile,
- - $2 specifies the dimension of image
- - $3 specifies the angstrom per pixel of image
- - $4 indicates the version of starfile, only include --relion31 if the file version is higher than 3.0
-
-**The pose and ctf pkls can be found in the same directory of the starfile, in this case, the pose pkl is /work/consensus_data_pose_euler.pkl, and the ctf pkl is /work/consensus_data_ctf.pkl**
-
-Next, you need to prepare a image stack. Suppose you have downloaded the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
-
-```relion_stack_create --i consensus_data.star --o all --one_by_one```
-
-***Sometimes after running some protocols in Relion using all.star, Relion might sort the order of images in the corresponding output starfile. You should make sure that the output starfile and the input all.star have the same order of images, thus the output starfile have the correct parameters for the images in all.mrcs!***
-
-Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
-
-**Data Preparation for Composition and Dynamics Disentanglement**
-
-OPUS-DSD2 features a new capacity to reconstruct multi-body dynamics and resolving compositional heterogeniety. 
-Reconstructing multibody dynamics in OPUS-DSD2 is very similar to Relion's multibody refinement protocol though the underlying dynamics model is different (You can see the details 
-in the preprint). First of all, you shall create a set of masks following Relion's multibody refinement protocol. You can find examples about masks and input starfile for
-the multibody refinement of spliceosome in https://empiar.pdbj.org/entry/10180/.
-There is also a tutorial with detailed process for creating masks in https://www.cryst.bbk.ac.uk/embo2019/pracs/RELION%20practical%20EMBO%202019_post%20practice.pdf . 
-The segment map tool in ChimeraX is also perfect for creating segmentations.
-
-After the masks and the starfile for multibody refinement are created, you can prepare the pkls for multibody dynamics estimation by executing
-
-```
-dsdsh prepare_multi starfile D apix masks numb --volumes VOLUMES
-```
-The details about each argument can be checked using ```dsdsh prepare_multi -h```
-The prepare_multi commands will create a pkl file that contains the parameters of defined bodies, which will be ***stored in the same directory 
-as the starfile***. OPUS-DSD2 will read the reference body of each body from the starfile, the body will be translated according to ```_rlnBodyRotateRelativeTo``` body.
-But you should note that the index of body starts from 1. The body that serves as the reference body for other bodies with the highest frequencies will be 
-selected as the center body and is free from translation.
-
-After executing these steps, you have all pkls and files required for running opus-DSD2.
 
 
 # training <a name="training"></a>
