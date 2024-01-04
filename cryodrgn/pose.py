@@ -148,6 +148,8 @@ class PoseTracker(nn.Module):
         top_mus = []
         neg_mus = []
         num_samples = 128
+        num_mu_samples = len(sample_mus)
+        num_samples = min(num_samples, num_mu_samples//4)
         for i in range(len(inds)):
             global_i  = inds[i]
             n_i = sample_idices
