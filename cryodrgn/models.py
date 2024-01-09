@@ -744,7 +744,7 @@ class Encoder(nn.Module):
             losses["mu2"] = torch.sum(mu**2, dim=-1)
             losses["std2"] = torch.sum(torch.exp(2*logstd), dim=-1)
             #losses["kldiv"] = torch.mean(- logstd + 0.5 * mu ** 2 + 0.5 * torch.exp(2 * logstd), dim=-1)
-            #losses["kldiv"] = torch.sum(-logstd, dim=-1) + 0.5*losses["std2"] + 0.5*losses["mu2"]
+            losses["kldiv"] = torch.sum(-logstd, dim=-1) + 0.5*losses["std2"] + 0.5*losses["mu2"]
 
         return {"z":z, "z_mu": mu, "losses": losses, "z_logstd": logstd, "rotated_x": x3d_center}
 

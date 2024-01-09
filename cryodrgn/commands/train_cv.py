@@ -488,7 +488,7 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
                         (1. - torch.exp(-torch.clamp((losses['l2'].mean().detach()/0.002)**2, max=16)))
         #print(lamb)
         eps = 1e-3
-        kld, mu2 = utils.compute_kld(z_mu, z_logstd)
+        #kld, mu2 = utils.compute_kld(z_mu, z_logstd)
         cross_corr = utils.compute_cross_corr(z_mu)
         loss = gen_loss + beta_control*beta*(kld)/mask_sum + torch.mean(losses['tvl2'] + 3e-1*losses['l2'])/(mask_sum)
         # compute cross entropy
