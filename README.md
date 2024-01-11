@@ -179,6 +179,8 @@ selected as the center body and is free from translation.
 
 After executing these steps, you have all pkls and files required for running opus-DSD2.
 
+We provided a mask pkl file for spliceosome using the EMPIAR deposited definiton of multi-bodies in https://drive.google.com/file/d/19fKECY3BDNboXmRUp0fPo9YJf3QarR_u/view?usp=drive_link .
+
 **Data preparation under the hood**
 
 OPUS-DSD follows cryoDRGN's input formats. The pose and ctf parameters for image stack are stored as the python pickle files, aka pkl. Suppose the refinement result is stored as `consensus_data.star` and **the format of the Relion STAR file is below version 3.0**,
