@@ -15,8 +15,7 @@ Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
 OPUS-DSD2 also greatly improves the quality of its reconstructions!
-<img width="747" alt="image17" src="https://github.com/alncat/opusDSD/assets/3967300/7e383dfe-e5d1-4c9e-b5a0-b747461bb56a">
-<img width="747" alt="image18" src="https://github.com/alncat/opusDSD/assets/3967300/9677f485-d545-4b19-a7d4-cbcc49cae6f0">
+<img width="1055" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/be04450d-a9b9-4982-96af-04bec5d7c6a9">
 
 
 The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data end-to-end during structural disentanglement!
