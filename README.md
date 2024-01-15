@@ -184,7 +184,7 @@ After executing these steps, you have all pkls and files required for running op
 
 We provided a mask pkl file for spliceosome using the EMPIAR deposited definiton of multi-bodies in https://drive.google.com/file/d/19fKECY3BDNboXmRUp0fPo9YJf3QarR_u/view?usp=drive_link . In the folder from link https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, you can also find the pose and ctf pkl and the global mask, which are named as consensus_data_pose_euler.pkl, consensus_data_ctf.pkl and mask.mrc, respectively. The segmentation of spliceosome given by deposited result is shown below.
 
-<img width="747" alt="image16" src="https://github.com/alncat/opusDSD/assets/3967300/86875e9a-2457-4526-a54c-7a9914d55cfe">
+<img width="288" alt="image16" src="https://github.com/alncat/opusDSD/assets/3967300/86875e9a-2457-4526-a54c-7a9914d55cfe">
 
 **Data preparation under the hood**
 
