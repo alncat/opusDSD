@@ -12,10 +12,14 @@
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6.  An exemplar movie of the OPUS-DSD2 is shown below:
 
-
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
-The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data during structural disentanglement!
+OPUS-DSD2 also greatly improves the quality of its reconstructions!
+<img width="747" alt="image17" src="https://github.com/alncat/opusDSD/assets/3967300/7e383dfe-e5d1-4c9e-b5a0-b747461bb56a">
+<img width="747" alt="image18" src="https://github.com/alncat/opusDSD/assets/3967300/9677f485-d545-4b19-a7d4-cbcc49cae6f0">
+
+
+The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data end-to-end during structural disentanglement!
 OPUS-DSD2 can not only disentangle 3D structural information by reconstructing different conformations, but also reconstruct physically meaningful dynamics for the macromolecules.
 This new function is very easy to use if you have already been familiar with Relion's multi-body refinement (https://elifesciences.org/articles/36861). OPUS-DSD2 takes the input files of Relion's multi-body refinement,
 then performs ***structural disentanglement and multi-body dynamics fitting*** simultaneously and end-to-end!
@@ -179,7 +183,9 @@ selected as the center body and is free from translation.
 
 After executing these steps, you have all pkls and files required for running opus-DSD2.
 
-We provided a mask pkl file for spliceosome using the EMPIAR deposited definiton of multi-bodies in https://drive.google.com/file/d/19fKECY3BDNboXmRUp0fPo9YJf3QarR_u/view?usp=drive_link . In the folder from link https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, you can also find the pose and ctf pkl and the global mask, which are named as consensus_data_pose_euler.pkl, consensus_data_ctf.pkl and mask.mrc, respectively.
+We provided a mask pkl file for spliceosome using the EMPIAR deposited definiton of multi-bodies in https://drive.google.com/file/d/19fKECY3BDNboXmRUp0fPo9YJf3QarR_u/view?usp=drive_link . In the folder from link https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, you can also find the pose and ctf pkl and the global mask, which are named as consensus_data_pose_euler.pkl, consensus_data_ctf.pkl and mask.mrc, respectively. The segmentation of spliceosome given by deposited result is shown below.
+
+<img width="747" alt="image16" src="https://github.com/alncat/opusDSD/assets/3967300/86875e9a-2457-4526-a54c-7a9914d55cfe">
 
 **Data preparation under the hood**
 
