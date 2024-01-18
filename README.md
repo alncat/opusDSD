@@ -321,7 +321,7 @@ multi-body dynamics, using the command
 ```
 dsdsh eval_vol resdir N dpc num apix --masks MASKS --kmeans KMEANS --dfk DFK
 ```
-This command selects the DFK class from the kmeans{KMEANS} folder as the template volume, which will be deformed according to the dynamics defined by the PC{dpc} of the dynamics latent space. The generated volumes show the dynamics on the selected class along the selected PC. Details about each argument can be checked using ```dsdsh eval_vol -h```
+This command selects the DFK class from the kmeans{KMEANS} folder as the template volume, which will be deformed according to the dynamics defined by the PC{dpc} of the dynamics latent space. The generated volumes show the dynamics on the selected class along the selected PC, and can be found in defanalyze.{N}/pc{dpc}. Details about each argument can be checked using ```dsdsh eval_vol -h```
 
 
 You can either generate the volume which corresponds to KMeans cluster centroid or traverses the principal component using,
