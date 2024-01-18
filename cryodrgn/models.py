@@ -233,7 +233,7 @@ class HetOnlyVAE(nn.Module):
             top = torch.topk(diff, k=3, dim=-1, largest=False, sorted=True)
             #print(top.values)
             #print(top.indices[:, 1:], mu)
-            encout["z_knn"] = mu[top.indices[:, 1:],:self.zdim]
+            encout["z_knn"] = mu[top.indices[:, 1:], :]#self.zdim]
             #print(encout["z_knn"])
         return z, encout
 

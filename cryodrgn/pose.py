@@ -112,6 +112,82 @@ class PoseTracker(nn.Module):
         self.poses_ind = poses_ind_new
         self.ns = [(len(x) // self.batch_size)*self.batch_size for x in self.poses_ind]
 
+    def sample_full_neighbors(self, euler, inds, num_pose=8):
+        cur_idx = self.euler_groups[inds[0]]
+        euler0 = euler[0, 0]*np.pi/180
+        euler1 = euler[0, 1]*np.pi/180
+        cur_idx_ = hp.ang2pix(self.hp_order, euler1, euler0, nest=True)
+        #assert cur_idx == cur_idx_
+        pose_sample = list(self.valid_poses)
+        # remove current pose
+        pose_sample.remove(cur_idx)
+        num_pose = min(len(pose_sample), num_pose)
+        perm = np.random.choice(pose_sample, size=num_pose, replace=False)
+        total = sum([self.ns[i] for i in perm])
+        sample_idices = []
+        sample_mus = []
+        #print(cur_idx, perm)
+        total_samples = 256*50
+        for i in range(len(perm)):
+            #pose_idx = pose_sample[i] #
+            pose_idx = perm[i]
+            # sample from selected pose
+            samples = np.random.choice(self.ns[pose_idx],
+                    size=min(int(self.ns[pose_idx]/total*total_samples), self.ns[pose_idx]), replace=False)
+            #print(samples)
+            idx_ = self.poses_ind[pose_idx][samples]
+            sample_idices.append(idx_)
+            sample_mus.append(torch.cat([self.mu[idx_,:], self.multi_mu[idx_,:]], dim=-1))
+        #print(total)
+        sample_idices = np.concatenate(sample_idices, axis=0)
+        sample_mus = torch.cat(sample_mus, dim=0)
+
+        # compare with current nearest neighbors
+        mus = []
+        top_indices = []
+        top_mus = []
+        neg_mus = []
+        num_samples = 128
+        num_mu_samples = len(sample_mus)
+        num_samples = min(num_samples, num_mu_samples//4)
+        for i in range(len(inds)):
+            global_i  = inds[i]
+            n_i = sample_idices
+            mu_ = sample_mus[..., :]
+            mu_i = torch.cat([self.mu[global_i, :], self.multi_mu[global_i, :]], dim=-1)
+
+            diff = (mu_i - mu_).pow(2).sum(-1)
+            top = torch.topk(diff, k=num_samples, largest=False, sorted=True)
+            # gather output
+            top_mu_ = mu_[top.indices, :]
+            mus.append(top_mu_)
+
+            neg = torch.topk(diff, k=num_samples*4, largest=True, sorted=True)
+
+            # uniform sample
+            uni_sample = np.random.choice(len(diff), size=num_samples*4, replace=False)
+            uni_mu = mu_[uni_sample, :]
+
+            # mix samples
+            neg_mu = mu_[neg.indices, :]
+            neg_mu = 0.8*neg_mu + 0.2*uni_mu
+
+            neg_mus.append(neg_mu)
+            #cur_inds = np.delete(inds, [i])
+            #cur_mus = self.mu[cur_inds, :]
+            #diff = (mu_i - cur_mus).pow(2).sum(-1)
+            #top = torch.topk(diff, k=3, largest=False, sorted=True)
+            top_indices.append(torch.tensor(n_i[top.indices[0]]))
+            #top_indices.append(torch.tensor(n_i[top.indices[:6]]))
+            #top_mus.append(self.mu[cur_inds[top.indices], :])
+
+        mus = torch.stack(mus, dim=0)
+        neg_mus = torch.stack(neg_mus, dim=0)
+        top_indices = torch.stack(top_indices, dim=0).view(-1) #(B*k)
+        top_mus = None #torch.stack(top_mus, dim=0)
+        #print(mus.shape, top_indices.shape, top_mus.shape)
+        return mus, top_indices, top_mus, neg_mus
+
     def sample_neighbors(self, euler, inds, num_pose=8):
         cur_idx = self.euler_groups[inds[0]]
         euler0 = euler[0, 0]*np.pi/180

@@ -244,7 +244,7 @@ def _unparallelize(model):
 def sample_neighbors(posetracker, data, euler, rot, ind, ctf_params, ctf_grid, grid, args, W, out_size):
     device = euler.get_device()
     B = euler.shape[0]
-    mus, idices, top_mus, neg_mus = posetracker.sample_neighbors(euler.cpu(), ind.cpu(), num_pose=8)
+    mus, idices, top_mus, neg_mus = posetracker.sample_full_neighbors(euler.cpu(), ind.cpu(), num_pose=8)
     other_euler = None #posetracker.get_euler(idices).to(device).view(B, -1, 3)
     other_rot, other_tran = None, None #posetracker.get_pose(idices)
     other_y, other_y_fft = None, None
@@ -362,8 +362,8 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             losses.update(encout["losses"])
         # set the encoding of each particle
         if args.encode_mode == "grad":
-            z_mu = encout["z_mu"][:, :args.zdim]
-            z_logstd = encout["z_logstd"][:, :args.zdim]
+            z_mu = encout["z_mu"]#[:, :args.zdim]
+            z_logstd = encout["z_logstd"]#[:, :args.zdim]
             #z = encout["encoding"]
         y_recon_ori = decout["y_recon_ori"]
         # retrieve mask
