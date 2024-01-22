@@ -219,7 +219,7 @@ For **the RELION STAR file with version hgiher than 3.0**, you should add --reli
 When the inputs are available, you can train the vae for structural disentanglement using
 
 ```
-dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 2. --split sp-split.pkl --bfactor 4. --templateres 224
+dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 1. --split sp-split.pkl --bfactor 4. --templateres 224
 ```
 
 The argument following train_cv specifies the image stack.
@@ -265,7 +265,7 @@ Happy Training! **Open an issue when running into any troubles.**
 To restart execution from a checkpoint, you can use
 
 ```
-dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 12 --zdim 12 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --lamb 2. --valfrac 0.25 --load /work/sp/weights.0.pkl --latents /work/sp/z.0.pkl --split sp-split.pkl --bfactor 4. --templateres 224
+dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single -n 20 --pe-type vanilla --encode-mode grad --template-type conv -b 12 --zdim 12 --lr 1.e-4  --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --lamb 1. --valfrac 0.25 --load /work/sp/weights.0.pkl --latents /work/sp/z.0.pkl --split sp-split.pkl --bfactor 4. --templateres 224
 ```
 | argument |  explanation |
 | --- | --- |
@@ -278,7 +278,7 @@ During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (o
 
 To reconstruct the multi-body dynamics, you should use the command ```dsd train_multi```, using ```dsd train_multi -h``` to check more details. Tho enbale dynamics reconstruction, you shall specify ```--masks``` to load the mask pkl with the parameters for each body. An example command is as below:
 ```
-dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_euler.pkl -n 20 -b 13 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/MaskCreate/job001/mask.mrc --split /work/pkls/sa-split.pkl --lamb 1.5 --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/mask_params.pkl --zaffdim 6 --load ../dsd/weights.5.pkl --latents ../dsd/z.5.pkl --plot
+dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_euler.pkl -n 20 -b 13 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/MaskCreate/job001/mask.mrc --split /work/pkls/sa-split.pkl --lamb 1. --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/mask_params.pkl --zaffdim 6 --load ../dsd/weights.5.pkl --latents ../dsd/z.5.pkl --plot
 ```
 | argument |  explanation |
 | --- | --- |
