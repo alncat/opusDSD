@@ -55,10 +55,6 @@ The movie of 80 ribosome along PC1
 
 https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-aabb-5d38a58cb7dd.mp4
 ## 80S ribosome <a name="80s"></a>
-The weight file can be downloaded from https://www.icloud.com/iclouddrive/0fab8AGmWkNjCsxVpasi-XsGg#weights.
-The other pkls for visualzing are deposited at https://drive.google.com/drive/folders/1D0kIP3kDhlhRx12jVUsZUObfHxsUn6NX?usp=share_link.
-These files are from the epoch 16 and trained with output volume of size 192. ```z.16.pkl``` stores the latent encodings for all particles. ```ribo_pose_euler.pkl``` is the pose parameter file. Our program will read configurations from ```config.pkl```. Put them in the same folder, you can then follow the [analyze result](#analysis) section to visualize the latent space.
-
 An exmaple UMAP of latent space for 80S ribosome:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-bold.png?raw=true "80S ribosome UMAP")
@@ -74,12 +70,11 @@ A more colorful umap is shown above. The particles are colored according to thei
 Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image.
 
 ## Spliceosome complex <a name="splice"></a>
-UMAP and some selected classes for the spliceosome complex
-<img width="1147" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/38bd6b99-f9f6-4cf9-b6d5-a22029d012d8">
 
-The movie of the movement in spliceosome along PC1
+OPUS-DSD2 has superior structural disentanglement ability to encode distinct compositional changes into different PCs in composition latent space.
 
-https://user-images.githubusercontent.com/3967300/221396607-9e4d9882-86f8-4f54-8122-3ee7fe48c956.mp4
+https://github.com/alncat/opusDSD/assets/3967300/dc5a91f6-2fd2-431e-8d61-8a362792f970
+
 
 # set up environment <a name="setup"></a>
 
