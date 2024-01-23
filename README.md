@@ -352,6 +352,14 @@ dsdsh eval_vol /work/sp 16 pc 1 2.2
 to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's ```vseries``` feature. An example script for visualizing movie is in ```analysis_scripts/movie.py```. You can show the movie of the volumes by ```ChimeraX --script "./analysis_scripts/movie.py reference 0.985```.
 **PCs are great for visualizing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
 
+You can use
+
+```
+dsdsh eval_vol . 19 dpc 2 2.2 --masks ../mask_test.pkl --kmeans 20 --dfk 4
+```
+
+to generate volumes along pc 2 in dynamics latent space using the 4th cluster in kmeans20 as template volume.
+
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
 ```
