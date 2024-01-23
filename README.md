@@ -1,8 +1,8 @@
 # Table of contents
 2. [Opus-DSD2](#opusdsd)
     1. [Movie example](#umap)
-    2. [80S ribosome](#80s)
-    3. [Spliceosome](#splice)
+    2. [Spliceosome](#splice)
+    3. [80S ribosome](#80s)
 4. [setup environment](#setup)
 5. [prepare data](#preparation)
 6. [training](#training)
@@ -50,10 +50,12 @@ The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In thi
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
-# Movie of the PC1 of the latent space of 80 ribosome learned by opus-DSD <div id="umap">
-The movie of 80 ribosome along PC1
+## Spliceosome complex <a name="splice"></a>
 
-https://user-images.githubusercontent.com/3967300/221396928-72303aad-66a1-4041-aabb-5d38a58cb7dd.mp4
+OPUS-DSD2 has superior structural disentanglement ability to encode distinct compositional changes into different PCs in composition latent space.
+
+https://github.com/alncat/opusDSD/assets/3967300/dc5a91f6-2fd2-431e-8d61-8a362792f970
+
 ## 80S ribosome <a name="80s"></a>
 An exmaple UMAP of latent space for 80S ribosome:
 
@@ -68,13 +70,6 @@ A more colorful umap is shown above. The particles are colored according to thei
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umapr.png?raw=true "80S ribosome color UMAP")
 
 Data source: [EMPIAR-10002](https://www.ebi.ac.uk/empiar/EMPIAR-10002/). The particles are colored according to their pose parameters in this image.
-
-## Spliceosome complex <a name="splice"></a>
-
-OPUS-DSD2 has superior structural disentanglement ability to encode distinct compositional changes into different PCs in composition latent space.
-
-https://github.com/alncat/opusDSD/assets/3967300/dc5a91f6-2fd2-431e-8d61-8a362792f970
-
 
 # set up environment <a name="setup"></a>
 
