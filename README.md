@@ -45,7 +45,7 @@ The architecture of encoder is (Encoder class in cryodrgn/models.py):
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/encoder.png?raw=true "Opus-DSD encoder")
 
 
-The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In this version, the default size of output volume is set to 192^3, I downsampled the intermediate activations to save some gpu memories. You can tune it as you wish, happy training!):
+The architecture of composition decoder is (ConvTemplate class in cryodrgn/models.py. In this version, the default size of output volume is set to 192^3, I downsampled the intermediate activations to save some gpu memories. You can tune it as you wish, happy training!):
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
@@ -61,6 +61,7 @@ OPUS-DSD2 has superior structural disentanglement ability to encode distinct com
 https://github.com/alncat/opusDSD/assets/3967300/dc5a91f6-2fd2-431e-8d61-8a362792f970
 
 ## 80S ribosome <a name="80s"></a>
+The following results are from the legacy OPUS-DSD.
 An exmaple UMAP of latent space for 80S ribosome learned by the legacy OPUS-DSD:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-bold.png?raw=true "80S ribosome UMAP")
