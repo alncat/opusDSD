@@ -1,8 +1,7 @@
 # Table of contents
 2. [Opus-DSD2](#opusdsd)
-    1. [Movie example](#umap)
-    2. [Spliceosome](#splice)
-    3. [80S ribosome](#80s)
+    1. [Spliceosome](#splice)
+    2. [80S ribosome](#80s)
 4. [setup environment](#setup)
 5. [prepare data](#preparation)
 6. [training](#training)
@@ -57,7 +56,7 @@ OPUS-DSD2 has superior structural disentanglement ability to encode distinct com
 https://github.com/alncat/opusDSD/assets/3967300/dc5a91f6-2fd2-431e-8d61-8a362792f970
 
 ## 80S ribosome <a name="80s"></a>
-An exmaple UMAP of latent space for 80S ribosome:
+An exmaple UMAP of latent space for 80S ribosome learned by the legacy OPUS-DSD:
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/umap-bold.png?raw=true "80S ribosome UMAP")
 
