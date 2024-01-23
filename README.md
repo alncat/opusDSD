@@ -37,7 +37,7 @@ Our approach strategically **leverages the inevitable pose assignment errors int
 
 The workflow of OPUS-DSD is demonstrated as follows:
 
-![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/workflow.png?raw=true "Opus-DSD Workflow")
+<img width="773" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/eabf176f-ac25-42d2-8e72-1651faa2d648">
 
 Note that all input and output of this method are in real space! (Fourier space is good, but how about real space!)
 The architecture of encoder is (Encoder class in cryodrgn/models.py):
@@ -48,6 +48,10 @@ The architecture of encoder is (Encoder class in cryodrgn/models.py):
 The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In this version, the default size of output volume is set to 192^3, I downsampled the intermediate activations to save some gpu memories. You can tune it as you wish, happy training!):
 
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
+
+The architecture of dynamics decoder is:
+<img width="422" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/6e81f980-3eb1-4e0a-8230-036ea6ccdc26">
+
 
 ## Spliceosome complex <a name="splice"></a>
 
