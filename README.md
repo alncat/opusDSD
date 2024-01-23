@@ -174,7 +174,7 @@ The prepare_multi commands will create a pkl file that contains the parameters o
 as the starfile***. The translation of each body is defined using the rotation around its reference body. The magnitude of its translation then is the magnitude of rotation of the center of this body in relative to its reference body. OPUS-DSD2 will read the reference bodies from the starfile, which are specified in ```_rlnBodyRotateRelativeTo```.
 But you should note that the index of body starts from 1. The body that occurs most often as the reference body for others will be 
 selected as the translation-free center. The translation of center will always be set to zero. The direction of rotational axis for the translation of multi-bodies can be determined using
- the volume series found by PCA analysis for the OPUS-DSD's result, since they represents a possible mode of movement. Otherwise, the direction of rotational axis will be aligned to the displacement between the center of a body and the center of its center body.
+ the volume series found by PCA analysis for the OPUS-DSD's result (**You can specify the volume series by giving the directory of volume series using --volumes**), since they represents a possible mode of movement. Otherwise, the direction of rotational axis will be aligned to the displacement between the center of a body and the center of its center body.
 
 After executing these steps, you have all pkls and files required for running opus-DSD2.
 
