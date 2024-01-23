@@ -50,6 +50,7 @@ The architecture of decoder is (ConvTemplate class in cryodrgn/models.py. In thi
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/decoder.png?raw=true "Opus-DSD decoder")
 
 The architecture of dynamics decoder is:
+
 <img width="422" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/6e81f980-3eb1-4e0a-8230-036ea6ccdc26">
 
 
