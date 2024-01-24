@@ -56,7 +56,7 @@ The architecture of dynamics decoder is:
 
 OPUS-DSD2 has superior structural disentanglement ability to encode distinct compositional changes into different PCs in composition latent space.
 
-https://github.com/alncat/opusDSD/assets/3967300/dc5a91f6-2fd2-431e-8d61-8a362792f970
+https://github.com/alncat/opusDSD/assets/3967300/9d64292a-a018-4949-b31c-4f04c03be829
 
 ## 80S ribosome <a name="80s"></a>
 The following results are from the legacy OPUS-DSD.
