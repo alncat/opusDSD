@@ -1579,7 +1579,7 @@ class VanillaDecoder(nn.Module):
                             #print(R_global_trans_i.shape, rot_i.shape, global_trans_i.shape)
 
                             #apply estimated global rotation and translation in this step
-                            pos = self.transformer.rotate(rot_i)
+                            pos = self.transformer.rotate(rot_i.detach())
                             #valid = F.grid_sample(self.sphere_mask.unsqueeze(1), pos, align_corners=ALIGN_CORNERS)
                             if self.ref_mask is not None:
                                 valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS)
