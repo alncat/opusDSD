@@ -10,6 +10,7 @@
 # Opus-DSD2 <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
 Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6.  An exemplar movie of the OPUS-DSD2 is shown below:
+
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
 OPUS-DSD2 also greatly improves the quality of its reconstructions!
@@ -35,12 +36,10 @@ An informative latent space is pivotal as it simplifies data analysis by providi
 Our approach strategically **leverages the inevitable pose assignment errors introduced during consensus refinement, while concurrently mitigating their impact on the quality of 3D reconstructions**. Although it might seem paradoxical to exploit errors while minimizing their effects, our method has proven effective in achieving this delicate balance.
 
 The workflow of OPUS-DSD is demonstrated as follows:
-
 <img width="773" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/eabf176f-ac25-42d2-8e72-1651faa2d648">
 
 Note that all input and output of this method are in real space! (Fourier space is good, but how about real space!)
 The architecture of encoder is (Encoder class in cryodrgn/models.py):
-
 ![Alt text](https://raw.githubusercontent.com/alncat/opusDSD/main/example/encoder.png?raw=true "Opus-DSD encoder")
 
 
