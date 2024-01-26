@@ -271,14 +271,14 @@ During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (o
 
 To reconstruct the multi-body dynamics, you should use the command ```dsd train_multi```, using ```dsd train_multi -h``` to check more details. Tho enbale dynamics reconstruction, you shall specify ```--masks``` to load the mask pkl with the parameters for each body. An example command is as below:
 ```
-dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_euler.pkl -n 20 -b 13 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/MaskCreate/job001/mask.mrc --split /work/pkls/sa-split.pkl --lamb 1. --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/mask_params.pkl --zaffdim 6 --load ../dsd/weights.5.pkl --latents ../dsd/z.5.pkl --plot
+dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_euler.pkl -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/MaskCreate/job001/mask.mrc --split /work/pkls/sa-split.pkl --lamb 1. --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/mask_params.pkl --zaffdim 6 --plot
 ```
 | argument |  explanation |
 | --- | --- |
 | --zaffdim | controls the dimension of dynamics latent space |
 | --masks | the pkl file contains the parameters for bodies of the macromolecule|
 
-If you omit ```--masks``` in the train_multi command, OPUS-DSD2 will estimate a global pose correction instead.
+If you omit ```--masks``` in the train_multi command, OPUS-DSD2 will estimate a global pose correction instead (train_cv also does this).
 
 # analyze result <a name="analysis"></a>
 You can use the analysis scripts in ```dsdsh``` to visualize the learned latent space! The analysis procedure is detailed as following.
