@@ -5,7 +5,12 @@
 4. [setup environment](#setup)
 5. [prepare data](#preparation)
 6. [training](#training)
-7. [analyze result](#analysis)
+   1. [train_cv](#train_cv)
+   2. [train_multi](#train_multi)
+8. [analyze result](#analysis)
+   1. [sample latent spaces](#sample)
+   2. [reconstruct volumes](#reconstruct)
+   3. [select particles](#select)
 
 # Opus-DSD2 <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
@@ -209,7 +214,9 @@ For **the RELION STAR file with version hgiher than 3.0**, you should add --reli
 
 # training <a name="training"></a>
 
-When the inputs are available, you can train the vae for structural disentanglement using
+## train_cv for OPUS-DSD <div id="train_cv">
+
+When the inputs are available, you can train the vae for structural disentanglement proposed in OPUS-DSD's paper using
 
 ```
 dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 1. --split sp-split.pkl --bfactor 4. --templateres 224
@@ -269,6 +276,8 @@ both are in the output directory
 
 During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. By default, opus-DSD reads all images into memory before training, so it may require some more host memories **To disable this behavior, you can include ```--notinmem``` into the training command**.
 
+## train_multi for OPUS-DSD2 <div id="train_multi">
+
 To reconstruct the multi-body dynamics, you should use the command ```dsd train_multi```, using ```dsd train_multi -h``` to check more details. Tho enbale dynamics reconstruction, you shall specify ```--masks``` to load the mask pkl with the parameters for each body. An example command is as below:
 ```
 dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_euler.pkl -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/MaskCreate/job001/mask.mrc --split /work/pkls/sa-split.pkl --lamb 1. --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/mask_params.pkl --zaffdim 6 --plot
@@ -292,7 +301,7 @@ To access detailed usage information for each command, execute the following:
 ```
 dsdsh commandx -h
 ```
-
+## sample latent spaces <div id="sample">
 The first step is to sample the latent space using kmeans and PCA algorithms. Suppose the training results are in ```/work/sp```, 
 ```
 dsdsh analyze /work/sp 16 4 16
@@ -306,6 +315,7 @@ dsdsh analyze /work/sp 16 4 16
 
 The analysis result will be stored in /work/sp/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in /work/sp/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in /work/sp/analyze.16/umap.png .
 
+## reconstruct volumes <div id="reconstruct">
 After executing the above command once, you may skip the lengthy umap embedding laterly by appending ```--skip-umap``` to the command in analyze.sh. Our analysis script will read the pickled umap embeddings directly.
 The eval_vol command has following options,
 
@@ -352,7 +362,7 @@ dsdsh eval_vol /work/sp 16 pc 1 2.2
 to generate volumes along pc1. You can check volumes in ```/work/sp/analyze.16/pc1```. You can make a movie using chimerax's ```vseries``` feature. An example script for visualizing movie is in ```analysis_scripts/movie.py```. You can show the movie of the volumes by ```ChimeraX --script "./analysis_scripts/movie.py reference 0.985```.
 **PCs are great for visualizing the main motions and compositional changes of marcomolecules, while KMeans reveals representative conformations in higher qualities.**
 
-
+## select particles <div id="select">
 Finally, you can also retrieve the star files for images in each kmeans cluster using
 
 ```
