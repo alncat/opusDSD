@@ -167,7 +167,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
     if update_params:
         optim.step()
     return z_mu, loss.item(), gen_loss.item(), snr.item(), losses['l2'].mean().item(), losses['tvl2'].mean().item(), \
-            mu2.item()/args.zdim, std2.item()/args.zdim, mmd.item(), c_mmd.item(), mse.item(), losses['aff2'].mean().item()
+            mu2.item()/(args.zdim+args.zaffdim), std2.item()/(args.zdim+args.zaffdim), mmd.item(), c_mmd.item(), mse.item(), losses['aff2'].mean().item()
 
 def data_augmentation(y, trans, ctf_grid, grid, window_r, downfrac=0.5):
     with torch.no_grad():
@@ -535,17 +535,17 @@ def loss_function(z_mu, z_logstd, y, yt, y_recon, beta,
     # compute cross entropy based on deconvoluted image
     diff = (z_mu.unsqueeze(1) - z_mu.unsqueeze(0)).pow(2).sum(dim=(-1)) + eps
     diag_mask = (~torch.eye(B, dtype=bool).to(z_mu.get_device())).float()
-    mmd = torch.log(1 + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
+    mmd = torch.log(1. + 1./diff)*torch.clip(diff.detach(), max=1)*diag_mask
     mmd = mmd.mean()
     loss += lamb*(c_mmd + mmd)*((beta+0.05)/1.05)/mask_sum
     if "knn" in losses:
         loss += lamb*losses["knn"]*((beta+0.05)/1.05)/mask_sum
 
-    if it % (args.log_interval*8) == B and args.plot:
+    if it % (args.log_interval*4) == B and args.plot:
         #group_stat.plot_variance(ind[0])
         log(f"mask_sum {mask_sum.detach().cpu()}")
-        print(probs)
-        plt.savefig('tmp.png')
+        #print(probs)
+        plt.savefig(args.tmp_prefix+'.png')
         #plt.show()
 
     return loss, gen_loss, snr, mu2.mean(), z_snr.mean(), rot_loss, tran_loss, top_euler, y2.mean()

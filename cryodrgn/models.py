@@ -1129,6 +1129,8 @@ class VanillaDecoder(nn.Module):
             # render_size also is equal to the size of downsampled experimental image
             self.transformer = SpatialTransformer(self.crop_vol_size, render_size=self.render_size)
             self.fourier_transformer = None #healpix_sampler.SpatialTransformer(self.crop_vol_size, use_fourier=True, render_size=self.crop_vol_size)
+            #self.register_buffer("ref_mask", torch.tensor([0.]))
+
             if in_vol is not None:
                 log("decoder: loading mask {}, volume render size is {}, volume of interest is {}".format(in_vol.shape, self.render_size, self.crop_vol_size))
                 #resample input mask to render_size
@@ -1565,7 +1567,7 @@ class VanillaDecoder(nn.Module):
 
                             body_trans_pred.append(trans_img[..., :2]*self.vol_size/self.scale)
                             pos = self.transformer.rotate(rot_i)
-                            valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS)
+                            valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS).detach()
                         else:
                             assert self.num_bodies == 0
                             # rotation
@@ -1582,7 +1584,7 @@ class VanillaDecoder(nn.Module):
                             pos = self.transformer.rotate(rot_i.detach())
                             #valid = F.grid_sample(self.sphere_mask.unsqueeze(1), pos, align_corners=ALIGN_CORNERS)
                             if self.ref_mask is not None:
-                                valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS)
+                                valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS).detach()
                             else:
                                 valid = None
                             # convert body_rots_pred to hopf_angles
@@ -1643,9 +1645,10 @@ class VanillaDecoder(nn.Module):
                     if self.fourier_transformer is None:
                         vol = F.grid_sample(template_i, pos, align_corners=ALIGN_CORNERS)
                         #vol = self.transformer.rotate_euler(template_i, euler_i)
-                        #vol = vol*valid
-                        image = torch.sum(vol, axis=-3).squeeze(1)
                         # Mask template using moving mask, generate projections
+                        #print(vol.shape, valid.shape)
+                        vol = vol*((valid > 0).float() + 1e-2)
+                        image = torch.sum(vol, axis=-3).squeeze(1)
                     else:
                         raise RuntimeError("Not implemented")
                     # append sampled angles
@@ -1782,10 +1785,16 @@ class VanillaDecoder(nn.Module):
                 affine_grid_i, valid, trans_img = self.transformer.multi_sh_grid(rot_i, rot_resi_i, self.com_bodies/self.vol_size,
                                                                         zero_3d, body_trans_i, radius=self.radius, second_coeffs=affine[2][0, ...],)
                 template = F.grid_sample(template, affine_grid_i, align_corners=ALIGN_CORNERS)
+                if self.ref_mask is not None:
+                    mask = F.grid_sample(self.ref_mask, affine_grid_i, align_corners=ALIGN_CORNERS)
+                    template *= mask # apply mask
 
             elif self.transformer.templateres != self.templateres:
                 #resample
                 template = self.transformer.sample(template)
+                if self.ref_mask is not None:
+                    mask = self.transformer.sample(self.ref_mask)
+                    template *= mask # apply mask
             template = template.squeeze(0).squeeze(0)
         else:
             template = self.template

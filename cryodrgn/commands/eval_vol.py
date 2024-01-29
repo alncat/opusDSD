@@ -166,6 +166,9 @@ def main(args):
             #model.encoder.load_state_dict(model_dict)
 
             pretrained_dict = checkpoint['decoder_state_dict']
+            #overwrite ref_mask
+            if "ref_mask" in pretrained_dict:
+                model.decoder.ref_mask =  pretrained_dict["ref_mask"]
             model_dict = model.decoder.state_dict()
             # 1. filter out unnecessary keys
             #pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
@@ -174,6 +177,7 @@ def main(args):
                 if k not in model_dict or pretrained_dict[k].shape != model_dict[k].shape:
                     if k in model_dict:
                         print(k, pretrained_dict[k].shape, model_dict[k].shape)
+                    #if k != "ref_mask":
                     del pretrained_dict[k]
             # 2. overwrite entries in the existing state dict
             model_dict.update(pretrained_dict)
