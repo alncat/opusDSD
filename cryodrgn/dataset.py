@@ -88,8 +88,8 @@ class LazyMRCData(data.Dataset):
 
     def get(self, i):
         if self.in_mem:
-            return self.particles[i]
-        img = self.particles[i].get()
+            return np.nan_to_num(self.particles[i])
+        img = np.nan_to_num(self.particles[i].get())
         if self.window is not None:
             img *= self.window
         if self.real_data:
