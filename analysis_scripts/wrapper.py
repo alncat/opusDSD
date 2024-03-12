@@ -15,7 +15,7 @@ class eval_vol:
         parser.add_argument('--masks', type=os.path.abspath, required=False, help='path to the pkl for masks params')
         parser.add_argument('--kmeans', type=int, required=False, help='the kmeans folder to select the template to be deformed')
         parser.add_argument('--dfk', type=int, required=False, help='the kmeans center serving as the template to be deformed')
-        parser.add_argument('--flip', action='store_true', required=False, help='the kmeans center serving as the template to be deformed')
+        parser.add_argument('--flip', action='store_true', required=False, help='invert handness of the reconstruction')
 
     @classmethod
     def main(cls, args):
