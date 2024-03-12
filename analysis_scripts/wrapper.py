@@ -15,15 +15,20 @@ class eval_vol:
         parser.add_argument('--masks', type=os.path.abspath, required=False, help='path to the pkl for masks params')
         parser.add_argument('--kmeans', type=int, required=False, help='the kmeans folder to select the template to be deformed')
         parser.add_argument('--dfk', type=int, required=False, help='the kmeans center serving as the template to be deformed')
+        parser.add_argument('--flip', action='store_true', required=False, help='the kmeans center serving as the template to be deformed')
 
     @classmethod
     def main(cls, args):
         script_path = os.path.join(os.path.dirname(__file__), 'eval_vol.sh')
+        if args.flip:
+            flip='--flip'
+        else:
+            flip=''
         if args.method == 'dpc':
             assert args.kmeans is not None and args.dfk is not None
-            subprocess.call(['bash', script_path, args.resdir, str(args.N), args.method, str(args.num), str(args.apix), args.masks, str(args.kmeans), str(args.dfk)])
+            subprocess.call(['bash', script_path, args.resdir, str(args.N), args.method, str(args.num), str(args.apix), args.masks, str(args.kmeans), str(args.dfk), flip])
         else:
-            subprocess.call(['bash', script_path, args.resdir, str(args.N), args.method, str(args.num), str(args.apix), str(args.num_bodies)])
+            subprocess.call(['bash', script_path, args.resdir, str(args.N), args.method, str(args.num), str(args.apix), str(args.num_bodies), flip])
 
 class analyze:
     @classmethod

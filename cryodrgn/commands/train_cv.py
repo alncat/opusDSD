@@ -82,7 +82,7 @@ def add_args(parser):
     group.add_argument('--norm', type=float, nargs=2, default=None, help='Data normalization as shift, 1/scale (default: 0, std of dataset)')
     group.add_argument('--tmp-prefix', type=str, default='tmp', help='prefix for naming intermediate reconstructions')
     group.add_argument('--amp', action='store_true', help='Use mixed-precision training')
-    group.add_argument('--multigpu', action='store_true', help='Parallelize training across all detected GPUs')
+    group.add_argument('--multigpu', default=True, action='store_true', help='Parallelize training across all detected GPUs')
     group.add_argument('--num-gpus', type=int, default=4, help='number of gpus used for training')
 
     group = parser.add_argument_group('Pose SGD')
@@ -699,6 +699,7 @@ def main(args):
     if args.encode_mode == 'conv':
         assert D-1 == 64, "Image size must be 64x64 for convolutional encoder"
     # parallelize
+    assert args.multigpu, "only support multigpu training"
     if args.multigpu and torch.cuda.device_count() > 1:
         if args.num_gpus is not None:
             args.num_gpus = min(args.num_gpus, torch.cuda.device_count())

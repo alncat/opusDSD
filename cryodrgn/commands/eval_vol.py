@@ -44,7 +44,7 @@ def add_args(parser):
 
     group = parser.add_argument_group('Volume arguments')
     group.add_argument('--Apix', type=float, default=1, help='Desired pixel size of the output volume (default: %(default)s A/pix)')
-    group.add_argument('--flip', action='store_true', help='Flip handedness of output volume')
+    group.add_argument('--flip', default=False, action='store_true', help='Flip handedness of output volume')
     group.add_argument('-d','--downsample', type=int, help='Downsample volumes to this box size (pixels)')
 
     group = parser.add_argument_group('Overwrite architecture hyperparameters in config.pkl')
@@ -224,7 +224,7 @@ def main(args):
                 #null_z = torch.zeros(zdim).to(device)
                 zz = torch.cat([template_z, zz], dim=-1)
             if vanilla:
-                model.save_mrc(f'{args.o}/{args.prefix}'+str(i), enc=zz, Apix=args.Apix)
+                model.save_mrc(f'{args.o}/{args.prefix}'+str(i), enc=zz, Apix=args.Apix, flip=args.flip)
             else:
                 if args.downsample:
                     extent = lattice.extent * (args.downsample/(D-1))

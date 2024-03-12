@@ -71,7 +71,7 @@ class LazyMRCData(data.Dataset):
     def estimate_normalization(self, n=1000):
         n = min(n,self.N)
         if self.real_data:
-            imgs = np.asarray([self.particles[i].get() for i in range(0,self.N, self.N//n)])
+            imgs = np.nan_to_num(np.asarray([self.particles[i].get() for i in range(0,self.N, self.N//n)]))
         else:
             imgs = np.asarray([fft.ht2_center(self.particles[i].get()) for i in range(0,self.N, self.N//n)])
         if self.invert_data: imgs *= -1

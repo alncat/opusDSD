@@ -291,10 +291,10 @@ class HetOnlyVAE(nn.Module):
         else:
             return self.decode(*args, **kwargs)
 
-    def save_mrc(self, filename, enc=None, Apix=1.):
+    def save_mrc(self, filename, enc=None, Apix=1., flip=False):
         if self.vanilla_dec:
             if enc is not None:
-                self.decoder.save(filename, z=enc, Apix=Apix)
+                self.decoder.save(filename, z=enc, Apix=Apix, flip=flip)
 
     def get_images(self, rots, trans):
         assert self.vanilla_dec
@@ -1647,7 +1647,7 @@ class VanillaDecoder(nn.Module):
                         #vol = self.transformer.rotate_euler(template_i, euler_i)
                         # Mask template using moving mask, generate projections
                         #print(vol.shape, valid.shape)
-                        vol = vol*((valid > 0).float() + 1e-2)
+                        vol = vol*((valid > 0).float() + 1e-3)
                         image = torch.sum(vol, axis=-3).squeeze(1)
                     else:
                         raise RuntimeError("Not implemented")
