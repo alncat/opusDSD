@@ -63,6 +63,17 @@ OPUS-DSD2 has superior structural disentanglement ability to encode distinct com
 
 https://github.com/alncat/opusDSD/assets/3967300/9d64292a-a018-4949-b31c-4f04c03be829
 
+## Covid Spike Protein <a name="cov"></a>
+The open and close of S1 region resolved by OPUS-DSD2 multi-body dynamics
+
+https://github.com/alncat/opusDSD/assets/3967300/4874e4d7-6f3c-440b-892b-1db028de228e
+
+The conformational changes inside the NTD of S1 region and S2 region resolved by OPUS-DSD2
+
+https://github.com/alncat/opusDSD/assets/3967300/5deac4af-2d7e-44c6-9809-595748ac13b5
+
+
+
 ## 80S ribosome <a name="80s"></a>
 The following results are from the legacy OPUS-DSD.
 An exmaple UMAP of latent space for 80S ribosome learned by the legacy OPUS-DSD:
