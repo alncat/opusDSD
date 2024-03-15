@@ -111,7 +111,7 @@ The inference pipeline of our program can run on any GPU which supports cuda 10.
 This program is developed based on cryoDRGN and adheres to a similar data preparation process.
 
 **Data Preparation Guidelines:**
-1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at https://pan.baidu.com/s/1Jz20p2XVNyz0ROp8jNR_dg?pwd=4an3 (It contains all required files for training), source (https://empiar.pdbj.org/entry/10492) and the splicesome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
+1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at https://pan.baidu.com/s/1Jz20p2XVNyz0ROp8jNR_dg?pwd=4an3 (It contains all required files for training), source (https://empiar.pdbj.org/entry/10492) and the spliceosome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
 
 2. **Consensus Refinement Result:** The program requires a consensus refinement result, which should not apply any symmetry and must be stored as a Relion STAR file. Other 3D reconstruction results such as 3D classification, as long as they determine the pose parameters of images, can also be supplied as input.
 
@@ -181,6 +181,8 @@ selected as the translation-free center. The translation of center will always b
 
 After executing these steps, you have all pkls and files required for running opus-DSD2.
 
+We provided a mask pkl file for covid spike protein in https://pan.baidu.com/s/1Jz20p2XVNyz0ROp8jNR_dg?pwd=4an3 , which is named as ```mask_test.pkl```.
+
 We provided a mask pkl file for spliceosome using the EMPIAR deposited definiton of multi-bodies in https://drive.google.com/file/d/19fKECY3BDNboXmRUp0fPo9YJf3QarR_u/view?usp=drive_link . In the folder from link https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, you can also find the pose and ctf pkl and the global mask, which are named as consensus_data_pose_euler.pkl, consensus_data_ctf.pkl and mask.mrc, respectively. We also deposited a trained weight and latent encoding file for visualzation in the same folder. The segmentation of spliceosome given by deposited result is shown below.
 
 <img width="288" alt="image16" src="https://github.com/alncat/opusDSD/assets/3967300/86875e9a-2457-4526-a54c-7a9914d55cfe">
@@ -240,7 +242,7 @@ The functionality of each argument is explained in the table:
 | -o | the directory name for storing results, such as model weights, latent encodings |
 | -r | ***the solvent mask created from consensus model***, our program will focus on fitting the contents inside the mask (more specifically, the 2D projection of a 3D mask). Since the majority part of image doesn't contain electron density, using the original image size is wasteful, by specifying a mask, our program will automatically determine a suitable crop rate to keep only the region with densities. |
 | --downfrac | the downsampling fraction of input image, the input to network will be downsampled to size of D\*downfrac, where D is the original size of image. You can set it according to resolution of consensus model and the ***templateres*** you set. |
-| --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, splicesome, you can set it to 1. or higher, for dataset with lower SNR, consider lowering it. Possible ranges are [0.1, 3.]. If you find **the UMAP of embeedings is exaggeratedly stretched into a ribbon**, then the lamb you used during training is too high! |
+| --lamb | the restraint strength of structural disentanglement prior proposed in DSD, set it according to the SNR of your dataset, for dataset with high SNR such as ribosome, spliceosome, you can set it to 1. or higher, for dataset with lower SNR, consider lowering it. Possible ranges are [0.1, 3.]. If you find **the UMAP of embeedings is exaggeratedly stretched into a ribbon**, then the lamb you used during training is too high! |
 | --split | the filename for storing the train-validation split of image stack |
 | --valfrac | the fraction of images in the validation set, default is 0.1 |
 | --bfactor | will apply exp(-bfactor/4 * s^2 * 4*pi^2) decaying to the FT of reconstruction, s is the magnitude of frequency, increase it leads to sharper reconstruction, but takes longer to reveal the part of model with weak density since it actually dampens learning rate, possible ranges are [3, 6]. Consider using higher values for more dynamic structures. We will decay the bfactor slightly in every epoch. This is equivalent to learning rate warming up. |
