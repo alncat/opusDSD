@@ -1,7 +1,8 @@
 # Table of contents
 2. [Opus-DSD2](#opusdsd)
     1. [Spliceosome](#splice)
-    2. [80S ribosome](#80s)
+    2. [Covid Spike](#cov)
+    3. [80S ribosome](#80s)
 4. [setup environment](#setup)
 5. [prepare data](#preparation)
 6. [training](#training)
