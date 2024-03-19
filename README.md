@@ -199,7 +199,7 @@ After executing these steps, you have all pkls and files required for running op
 We provided a mask pkl file for covid spike protein in : https://pan.baidu.com/s/17WFQBzFaYWCpk33tZoST5Q?pwd=4kxk , which is named as ```mask_test.pkl```.
 The segmentation of covid spike protein is shown below:
 
-<img width="796" alt="seg" src="https://github.com/alncat/opusDSD/assets/3967300/bf499f26-9859-4ed9-aa6d-7e03d2aca13b">
+<img width="288" alt="seg" src="https://github.com/alncat/opusDSD/assets/3967300/bf499f26-9859-4ed9-aa6d-7e03d2aca13b">
 
 
 We provided a mask pkl file for spliceosome using the EMPIAR deposited definiton of multi-bodies in https://drive.google.com/file/d/19fKECY3BDNboXmRUp0fPo9YJf3QarR_u/view?usp=drive_link . In the folder from link https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, you can also find the pose and ctf pkl and the global mask, which are named as consensus_data_pose_euler.pkl, consensus_data_ctf.pkl and mask.mrc, respectively. We also deposited a trained weight and latent encoding file for visualzation in the same folder. The segmentation of spliceosome given by deposited result is shown below.
