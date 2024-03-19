@@ -66,7 +66,7 @@ https://github.com/alncat/opusDSD/assets/3967300/9d64292a-a018-4949-b31c-4f04c03
 
 ## Covid Spike Protein <a name="cov"></a>
 The open and close of S1 region resolved by OPUS-DSD2 multi-body dynamics, PC3 shows the dynamics to open S1 region, while PC1 shows the dynamics to close S1 region. Red arrows 
-indicate the directions of movements of each S1 subunit.
+indicate the directions of movements of S1 subunits.
 
 https://github.com/alncat/opusDSD/assets/3967300/3bc8090c-6eaa-4122-a51a-78375ab3be34
 
