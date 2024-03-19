@@ -73,7 +73,7 @@ https://github.com/alncat/opusDSD/assets/3967300/3bc8090c-6eaa-4122-a51a-78375ab
 
 The conformational changes inside the NTD of S1 region and S2 region resolved by OPUS-DSD2
 
-https://github.com/alncat/opusDSD/assets/3967300/5deac4af-2d7e-44c6-9809-595748ac13b5
+https://github.com/alncat/opusDSD/assets/3967300/3533a5ca-9e17-4995-9de7-7f6497085274
 
 
 ## 80S ribosome <a name="80s"></a>
