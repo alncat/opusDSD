@@ -124,7 +124,7 @@ The inference pipeline of our program can run on any GPU which supports cuda 10.
 This program is developed based on cryoDRGN and adheres to a similar data preparation process.
 
 **Data Preparation Guidelines:**
-1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at: https://pan.baidu.com/s/12IQFfKyspEbI3Pa3XnnnXw?pwd=uwwe (It contains all required files for training and trained weights), source (https://empiar.pdbj.org/entry/10492)
+1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at: https://pan.baidu.com/s/1PAs7uaUIIeyqegq3sdciYg?pwd=v24j  (It contains all required files for training and trained weights), source (https://empiar.pdbj.org/entry/10492)
 
 and the spliceosome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
 
@@ -196,7 +196,7 @@ selected as the translation-free center. The translation of center will always b
 
 After executing these steps, you have all pkls and files required for running opus-DSD2.
 
-We provided a mask pkl file for covid spike protein in : https://pan.baidu.com/s/12IQFfKyspEbI3Pa3XnnnXw?pwd=uwwe , which is named as ```mask_test.pkl```.
+We provided a mask pkl file for covid spike protein in : https://pan.baidu.com/s/1PAs7uaUIIeyqegq3sdciYg?pwd=v24j , which is named as ```mask_test.pkl```.
 The segmentation of covid spike protein is shown below:
 
 <img width="288" alt="seg" src="https://github.com/alncat/opusDSD/assets/3967300/bf499f26-9859-4ed9-aa6d-7e03d2aca13b">
