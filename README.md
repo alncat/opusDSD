@@ -124,7 +124,9 @@ The inference pipeline of our program can run on any GPU which supports cuda 10.
 This program is developed based on cryoDRGN and adheres to a similar data preparation process.
 
 **Data Preparation Guidelines:**
-1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at https://pan.baidu.com/s/1Jz20p2XVNyz0ROp8jNR_dg?pwd=4an3 (It contains all required files for training), source (https://empiar.pdbj.org/entry/10492) and the spliceosome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
+1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at: https://pan.baidu.com/s/17WFQBzFaYWCpk33tZoST5Q?pwd=4kxk (It contains all required files for training and trained weights), source (https://empiar.pdbj.org/entry/10492)
+
+and the spliceosome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
 
 2. **Consensus Refinement Result:** The program requires a consensus refinement result, which should not apply any symmetry and must be stored as a Relion STAR file. Other 3D reconstruction results such as 3D classification, as long as they determine the pose parameters of images, can also be supplied as input.
 
@@ -194,7 +196,11 @@ selected as the translation-free center. The translation of center will always b
 
 After executing these steps, you have all pkls and files required for running opus-DSD2.
 
-We provided a mask pkl file for covid spike protein in https://pan.baidu.com/s/1Jz20p2XVNyz0ROp8jNR_dg?pwd=4an3 , which is named as ```mask_test.pkl```.
+We provided a mask pkl file for covid spike protein in : https://pan.baidu.com/s/17WFQBzFaYWCpk33tZoST5Q?pwd=4kxk , which is named as ```mask_test.pkl```.
+The segmentation of covid spike protein is shown below:
+
+<img width="796" alt="seg" src="https://github.com/alncat/opusDSD/assets/3967300/bf499f26-9859-4ed9-aa6d-7e03d2aca13b">
+
 
 We provided a mask pkl file for spliceosome using the EMPIAR deposited definiton of multi-bodies in https://drive.google.com/file/d/19fKECY3BDNboXmRUp0fPo9YJf3QarR_u/view?usp=drive_link . In the folder from link https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, you can also find the pose and ctf pkl and the global mask, which are named as consensus_data_pose_euler.pkl, consensus_data_ctf.pkl and mask.mrc, respectively. We also deposited a trained weight and latent encoding file for visualzation in the same folder. The segmentation of spliceosome given by deposited result is shown below.
 
