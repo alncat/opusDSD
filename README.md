@@ -65,15 +65,15 @@ OPUS-DSD2 has superior structural disentanglement ability to encode distinct com
 https://github.com/alncat/opusDSD/assets/3967300/9d64292a-a018-4949-b31c-4f04c03be829
 
 ## Covid Spike Protein <a name="cov"></a>
-The open and close of S1 region resolved by OPUS-DSD2 multi-body dynamics, PC3 shows the dynamics to open S1 region, while PC1 shows the dynamics to close S1 region.
+The open and close of S1 region resolved by OPUS-DSD2 multi-body dynamics, PC3 shows the dynamics to open S1 region, while PC1 shows the dynamics to close S1 region. Red arrows 
+indicate the directions of movements of each S1 subunit.
 
+https://github.com/alncat/opusDSD/assets/3967300/3bc8090c-6eaa-4122-a51a-78375ab3be34
 
-https://github.com/alncat/opusDSD/assets/3967300/17a6f51d-9410-4d62-8bf7-5fb3a9d244b2
 
 The conformational changes inside the NTD of S1 region and S2 region resolved by OPUS-DSD2
 
 https://github.com/alncat/opusDSD/assets/3967300/5deac4af-2d7e-44c6-9809-595748ac13b5
-
 
 
 ## 80S ribosome <a name="80s"></a>
