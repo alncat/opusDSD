@@ -1,3 +1,6 @@
+# New updates!
+We have developed a structural heterogeneity resolving method for cryo-ET. Welcome to check out https://github.com/alncat/opusTomo!
+
 # Table of contents
 2. [Opus-DSD2](#opusdsd)
     1. [Spliceosome](#splice)
