@@ -263,13 +263,14 @@ class VolData(data.Dataset):
         r = torch.sqrt(radius.sum(dim=(0,1,2))/mass)
         #principal axes
         matrix = -centered.unsqueeze(-1) * centered.unsqueeze(-2)
-        radius_sum = torch.eye(3) * (radius.sum(dim=-1, keepdim=True).unsqueeze(-1))
-        matrix = ((matrix+radius_sum)*vol.unsqueeze(-1)).sum(dim=(0, 1, 2))
+        #radius_sum = torch.eye(3) * (radius.sum(dim=-1, keepdim=True).unsqueeze(-1))
+        matrix = ((-matrix)*vol.unsqueeze(-1)).sum(dim=(0, 1, 2))
         eigvals, eigvecs = np.linalg.eig(matrix.numpy())
         indices = np.argsort(eigvals)
         #print(matrix, eigvals[indices])
         eigvecs = torch.from_numpy(eigvecs[:, indices].T) # eigvecs[0] is the first eigen vector with largest eigenvalues
         #print(eigvecs @ eigvecs[2])
+        r = np.sqrt(eigvals/mass)
 
         return center, r, eigvecs
 
