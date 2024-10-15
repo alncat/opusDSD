@@ -461,7 +461,7 @@ class ConvTemplate(nn.Module):
                 second_order = self.second_order_head(aff0).view(-1, self.num_bodies, 5, 3)
             else:
                 second_order = None
-            one = torch.ones_like(affine[..., :1])*24.
+            one = torch.ones_like(affine[..., :1])*16.
             quat = torch.cat([one, affine[..., :3]], dim=-1)
             #quat = lie_tools.exp_quaternion(affine[..., :3])
             trans = affine[..., 3:]
@@ -1762,7 +1762,7 @@ class VanillaDecoder(nn.Module):
             template, affine = self.template(z)
             if affine is not None:
                 body_quat_i = affine[0][0, ...]
-                one = torch.ones_like(affine[1][0, :, :1])*8.
+                one = torch.ones_like(affine[1][0, :, :1])*16.
                 body_trans_i = torch.cat([one, affine[1][0, ...]], dim=-1)
                 body_trans_i = lie_tools.quaternions_to_SO3_wiki(body_trans_i)
 
