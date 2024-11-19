@@ -288,11 +288,14 @@ def main(args):
         rotate_directions.append(com_bodies[in_relatives[b_i]] - com_bodies[b_i])
         rotate_directions_ori.append(com_bodies[b_i] - com_bodies[in_relatives[b_i]])
         rotate_directions[-1] = F.normalize(rotate_directions[-1], dim=0)
-        orient_bodies.append(utils.align_with_z(-rotate_directions[-1]))
+        if b_i != origin_rel:
+            orient_bodies.append(utils.align_with_z(-rotate_directions[-1]))
+        else:
+            orient_bodies.append(utils.align_with_z(rotate_directions[-1]))
         relats.append(com_bodies[in_relatives[b_i]])
         #reset rotation axis for center mask
-        if b_i == origin_rel:
-            rotate_directions_ori[b_i] = com_bodies[b_i] - com_bodies[b_i]
+        #if b_i == origin_rel:
+        #    rotate_directions_ori[b_i] = com_bodies[b_i] - com_bodies[b_i]
         #normalize direction
     A_rot90 = lie_tools.yrot(torch.tensor(-90))
     rotate_directions = torch.stack(rotate_directions, dim=0)
