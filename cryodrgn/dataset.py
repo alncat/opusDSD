@@ -88,11 +88,15 @@ class LazyMRCData(data.Dataset):
 
     def get(self, i):
         if self.in_mem:
-            return np.nan_to_num(self.particles[i])
+            img = np.nan_to_num(self.particles[i])
+            # image normalization suggested by xiangru chen
+            img = (img - self.norm[0])/(self.norm[1] + 1e-5)
+            return img
         img = np.nan_to_num(self.particles[i].get())
         if self.window is not None:
             img *= self.window
         if self.real_data:
+            img = (img - self.norm[0])/(self.norm[1] + 1e-5)
             return img
         img = fft.ht2_center(img).astype(np.float32)
         if self.invert_data: img *= -1
