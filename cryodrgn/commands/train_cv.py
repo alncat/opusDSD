@@ -63,7 +63,7 @@ def add_args(parser):
     group.add_argument('--datadir', type=os.path.abspath, help='Path prefix to particle stack if loading relative paths from a .star or .cs file')
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
     group.add_argument('--lazy-single', default=True, action='store_true', help='the dataloader for opus-DSD')
-    group.add_argument('--notinmem', default=False, action='store_true', help='Reading all images into memory')
+    group.add_argument('--notinmem', default=True, action='store_true', help='Reading all images into memory')
 
     group = parser.add_argument_group('Tilt series')
     group.add_argument('--tilt', help='Particles (.mrcs)')
@@ -883,8 +883,12 @@ def main(args):
     train_split, val_split = rand_split[:Nimg_train], rand_split[Nimg_train:]
     train_sampler = dataset.ClassSplitBatchSampler(args.batch_size, posetracker.poses_ind, train_split)
     val_sampler = dataset.ClassSplitBatchSampler(args.batch_size, posetracker.poses_ind, val_split)
-    data_generator = DataLoader(data, batch_sampler=train_sampler)
-    val_data_generator = DataLoader(data, batch_sampler=val_sampler)
+    if args.notinmem:
+        data_generator = DataLoader(data, batch_sampler=train_sampler, pin_memory=True, num_workers=16)
+        val_data_generator = DataLoader(data, batch_sampler=val_sampler, pin_memory=True, num_workers=16)
+    else:
+        data_generator = DataLoader(data, batch_sampler=train_sampler)
+        val_data_generator = DataLoader(data, batch_sampler=val_sampler)
 
     log(f'image will be downsampled to {args.downfrac} of original size {D-1}')
     log(f'reconstruction will be blurred by bfactor {args.bfactor}')
