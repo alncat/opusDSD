@@ -1,5 +1,5 @@
 # New updates!
-We have developed a structural heterogeneity resolving method for cryo-ET, **OPUS-TOMO**. Welcome to check out https://github.com/alncat/opusTomo!
+We have developed a structural heterogeneity resolving method for cryo-ET, **OPUS-TOMO**. Welcome to check out https://github.com/alncat/opusTomo! (The code in this repo will support multi-body dynamics soon, updating!)
 
 # Table of contents
 2. [Opus-DSD2](#opusdsd)
@@ -18,7 +18,7 @@ We have developed a structural heterogeneity resolving method for cryo-ET, **OPU
 
 # Opus-DSD2 <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://www.biorxiv.org/content/10.1101/2024.09.24.614854v1 and https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6. The tutorial for OPUS-DSD2 is avaible at this README file and the wiki page of this repo https://github.com/alncat/opusDSD/wiki/Multi%E2%80%90body-structural-disentanglement-in-OPUS%E2%80%90DSD2.  An exemplar movie of the OPUS-DSD2 is shown below:
+Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://www.biorxiv.org/content/10.1101/2024.09.24.614854 and https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6. The tutorial for OPUS-DSD2 is avaible at this README file and the wiki page of this repo https://github.com/alncat/opusDSD/wiki/Multi%E2%80%90body-structural-disentanglement-in-OPUS%E2%80%90DSD2.  An exemplar movie of the OPUS-DSD2 is shown below:
 
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
@@ -26,7 +26,7 @@ OPUS-DSD2 also greatly improves the quality of its reconstructions!
 <img width="1055" alt="image" src="https://github.com/alncat/opusDSD/assets/3967300/be04450d-a9b9-4982-96af-04bec5d7c6a9">
 
 
-The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM data end-to-end during structural disentanglement!
+The major new functionality of OPUS-DSD2 is reconstructing multi-body dynamics from cryo-EM/ET data end-to-end during structural disentanglement!
 OPUS-DSD2 can not only disentangle 3D structural information by reconstructing different conformations, but also reconstruct physically meaningful dynamics for the macromolecules.
 This new function is very easy to use if you have already been familiar with Relion's multi-body refinement (https://elifesciences.org/articles/36861). OPUS-DSD2 takes the input files of Relion's multi-body refinement (just the definition of multi-body! You don't need to perform refinement),
 then performs ***structural disentanglement and multi-body dynamics fitting*** simultaneously and end-to-end!
