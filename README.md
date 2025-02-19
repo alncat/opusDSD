@@ -1,5 +1,5 @@
 # New updates!
-We have developed a structural heterogeneity resolving method for cryo-ET, **OPUS-TOMO**. Welcome to check out https://github.com/alncat/opusTomo! (The code in this repo will support multi-body dynamics soon, updating!)
+We have developed a structural heterogeneity resolving method for cryo-ET, **OPUS-TOMO**. Welcome to check out https://github.com/alncat/opusTomo! (The code in this repo will support multi-body dynamics soon, updating!) More updates are coming! We will release training codes using better parallelism instead of dataparallel from pytorch!
 
 # Table of contents
 2. [Opus-DSD2](#opusdsd)
