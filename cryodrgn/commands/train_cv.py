@@ -73,6 +73,7 @@ def add_args(parser):
     group.add_argument('-b','--batch-size', type=int, default=20, help='Minibatch size (default: %(default)s)')
     group.add_argument('--wd', type=float, default=0, help='Weight decay in Adam optimizer (default: %(default)s)')
     group.add_argument('--lr', type=float, default=1.e-4, help='Learning rate in Adam optimizer (default: %(default)s)')
+    group.add_argument('--accum-step', type=int, default=2, help='gradient accumulation step for optimizer (default: %(default)s)')
     group.add_argument('--lamb', type=float, default=0.5, help='restraint strength for umap prior (default: %(default)s)')
     group.add_argument('--downfrac', type=float, default=0.5, help='downsample to (default: %(default)s) of original size')
     group.add_argument('--templateres', type=int, default=192, help='define the output size of 3d volume (default: %(default)s)')
@@ -123,9 +124,9 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                 beta_control=None, tilt=None, ind=None, grid=None, ctf_grid=None,
                 ctf_params=None, yr=None, use_amp=False, save_image=False, vanilla=True,
                 group_stat=None, do_scale=False, it=None, enc=None,
-                args=None, euler=None, posetracker=None, data=None, update_params=True, snr2=None):
+                args=None, euler=None, posetracker=None, data=None, backward=True, update_params=True, snr2=None):
 
-    if update_params:
+    if backward:
         model.train()
     else:
         model.eval()
@@ -141,8 +142,8 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                                                                  args=args,
                                                                  euler=euler,
                                                                  posetracker=posetracker, data=data, snr2=snr2)
-    if update_params:
-        optim.zero_grad()
+    #if update_params:
+    #    optim.zero_grad()
 
     loss, gen_loss, snr, mu2, std2, mmd, c_mmd, top_euler, mse = loss_function(z_mu, z_logstd, y, yt, y_recon,
                                         beta, y_recon_tilt, beta_control, vanilla=vanilla,
@@ -153,13 +154,14 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
     if top_euler is not None and not update_params:
         posetracker.set_euler(top_euler, ind)
 
-    if use_amp:
-        with amp.scale_loss(loss, optim) as scaled_loss:
-            scaled_loss.backward()
-    elif update_params:
+    #if use_amp:
+    #    with amp.scale_loss(loss, optim) as scaled_loss:
+    #        scaled_loss.backward()
+    if backward:
         loss.backward()
     if update_params:
         optim.step()
+        optim.zero_grad()
     return z_mu, loss.item(), gen_loss.item(), snr.item(), losses['l2'].mean().item(), losses['tvl2'].mean().item(), \
             mu2.item()/args.zdim, std2.item()/args.zdim, mmd.item(), c_mmd.item(), mse.item()
 
@@ -921,6 +923,7 @@ def main(args):
         mmd_var_ema = 0.1
         c_mmd_ema, c_mmd_var_ema = 0., 0.1
         update_it = 0
+        optim.zero_grad()
         beta_control = args.beta_control
         #increasing bfactor slowly
         #args.bfactor = bfactor*(1. - 0.5/(1. + 3.*math.exp(-0.25*epoch)))*8./7.
@@ -964,7 +967,7 @@ def main(args):
                                               save_image=save_image, group_stat=group_stat,
                                               it=batch_it, enc=None,
                                               args=args, euler=euler,
-                                              posetracker=posetracker, data=data, update_params=True, snr2=snr_ema)
+                                              posetracker=posetracker, data=data, update_params=(update_it % args.accum_step == args.accum_step - 1), snr2=snr_ema)
             update_it += 1
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
@@ -1066,7 +1069,7 @@ def main(args):
                                               save_image=save_image, group_stat=group_stat,
                                               it=batch_it, enc=None,
                                               args=args, euler=euler,
-                                              posetracker=posetracker, data=data, update_params=False, snr2=snr_ema)
+                                              posetracker=posetracker, data=data, backward=False, update_params=False, snr2=snr_ema)
             if do_pose_sgd and epoch >= args.pretrain:
                 pose_optimizer.step()
             # logging
