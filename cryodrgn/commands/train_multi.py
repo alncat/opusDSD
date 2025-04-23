@@ -127,7 +127,7 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
                 beta_control=None, tilt=None, ind=None, grid=None, ctf_grid=None,
                 ctf_params=None, yr=None, use_amp=False, save_image=False, vanilla=True,
                 group_stat=None, do_scale=False, it=None, enc=None,
-                args=None, euler=None, posetracker=None, data=None, backward=False, update_params=True,
+                args=None, euler=None, posetracker=None, data=None, backward=True, update_params=True,
                 snr2=1., body_poses=None):
 
     if backward:
