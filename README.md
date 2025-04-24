@@ -237,15 +237,20 @@ For **the RELION STAR file with version hgiher than 3.0**, you should add --reli
 
 # training <a name="training"></a>
 
-## train_cv for OPUS-DSD <div id="train_cv">
+## train_cv/train_multi for OPUS-DSD <div id="train_cv">
 
+**You can simply replace ```train_cv``` by ```train_multi``` in the following command, which is recommended since ```train_multi``` is the latest training script!**
 When the inputs are available, you can train the vae for structural disentanglement proposed in OPUS-DSD's paper using
 
 ```
 dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 1. --split sp-split.pkl --bfactor 4. --templateres 224
 ```
+or
+```
+dsd train_multi /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 1. --split sp-split.pkl --bfactor 4. --templateres 224
+```
 
-The argument following train_cv specifies the image stack.
+The argument following train_cv/train_multi specifies the image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is selected! Our program set the default values of those arguments to the values shown in above command.
 
 The functionality of each argument is explained in the table:
