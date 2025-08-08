@@ -127,7 +127,7 @@ The inference pipeline of our program can run on any GPU which supports cuda 10.
 This program is developed based on cryoDRGN and adheres to a similar data preparation process.
 
 **Data Preparation Guidelines:**
-1. **Cryo-EM Dataset:** Ensure that the cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at: https://pan.baidu.com/s/1PAs7uaUIIeyqegq3sdciYg?pwd=v24j  (It contains all required files for training and trained weights), source (https://empiar.pdbj.org/entry/10492)
+1. **Cryo-EM Dataset:** The cryo-EM dataset is stored in the MRCS stack file format. Suitable datasets for tutorial are the covid spike protein which is available at: https://pan.baidu.com/s/1PAs7uaUIIeyqegq3sdciYg?pwd=v24j  (It contains all required files for training and trained weights), source (https://empiar.pdbj.org/entry/10492)
 
 and the spliceosome which is available at https://empiar.pdbj.org/entry/10180/ (It contains the consensus refinement result.)
 
@@ -168,11 +168,13 @@ dsdsh prepare /work/consensus_data.star 320 1.699 --relion31
 
 **The pose and ctf pkls can be found in the same directory of the starfile, in this case, the pose pkl is /work/consensus_data_pose_euler.pkl, and the ctf pkl is /work/consensus_data_ctf.pkl**
 
-Next, you need to prepare a image stack. Suppose you have downloaded the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
+Next, you can prepare a image stack. Suppose you have downloaded the spliceosome dataset. You can prepare a particle stack named ```all.mrcs``` using
 
 ```relion_stack_create --i consensus_data.star --o all --one_by_one```
 
 ***Sometimes after running some protocols in Relion using all.star, Relion might sort the order of images in the corresponding output starfile. You should make sure that the output starfile and the input all.star have the same order of images, thus the output starfile have the correct parameters for the images in all.mrcs!***
+
+**If you dont want to create an additional image stack, you can just supply the starfile to the training command, e.g. ```consensus_data.star```. Then you only need to ensure the images path in starfile is correct!**
 
 Finally, you should **create a mask using the consensus model and RELION** through ```postprocess```. The detailed procedure for mask creation can be found in https://relion.readthedocs.io/en/release-3.1/SPA_tutorial/Mask.html. The spliceosome dataset on empiar comes with a ```global_mask.mrc``` file. Suppose the filename of mask is ```mask.mrc```, move it to the program directory for simplicity.
 
@@ -249,6 +251,11 @@ or
 ```
 dsd train_multi /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 1. --split sp-split.pkl --bfactor 4. --templateres 224
 ```
+or
+```
+dsd train_multi sp.star --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-single --pe-type vanilla --encode-mode grad --template-type conv -n 20 -b 12 --zdim 12 --lr 1.e-4 --num-gpus 4 --multigpu --beta-control 2. --beta cos -o /work/sp -r ./mask.mrc --downfrac 0.75 --valfrac 0.25 --lamb 1. --split sp-split.pkl --bfactor 4. --templateres 224 --datadir /work/
+```
+You can prepend the correct prefix for image path in ```sp.star``` via ```--datadir```. If ```--datadir``` is not specified, the program will try to read images from the directory of ```sp.star```. **You should convert the starfile to Relion2 format for best compatability.**
 
 The argument following train_cv/train_multi specifies the image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is selected! Our program set the default values of those arguments to the values shown in above command.
@@ -278,6 +285,7 @@ The functionality of each argument is explained in the table:
 | --tmp-prefix | the prefix of intermediate reconstructions, default value is ```tmp```. OPUS-DSD will output temporary reconstructions to the root directory of this program when training, whose names are ```$tmp-prefix.mrc``` |
 | --notinmem | this arguement let OPUS-DSD reading image stacks from hard disk during training, this is helpful when a huge dataset cannot fit in the memory, default is true |
 | --accum-step | this argument controls the number of gradient accumulation steps during training, which increases the batch size by accum_step times |
+| --datadir | Path prefix to the image stack in star input|
 
 The plot mode will ouput the following images in the directory where you issued the training command:
 
