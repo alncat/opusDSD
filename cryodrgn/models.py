@@ -439,7 +439,7 @@ class ConvTemplate(nn.Module):
         self.conv_out = nn.ConvTranspose3d(inchannels, 1, 4, 2, 1)
         #self.conv_out = nn.Conv3d(inchannels, 1, 3, 1, 1)
 
-        utils.initmod(self.conv_out, gain=1./np.sqrt(templateres))
+        utils.initmod(self.conv_out)#, gain=1./np.sqrt(templateres))
 
         self.intermediate_size = int(16*self.templateres/256)
         log('convtemplate: the output volume is of size {}, resample intermediate activations of size 16 to {}'.format(self.templateres, self.intermediate_size))
@@ -1648,7 +1648,7 @@ class VanillaDecoder(nn.Module):
                         # Mask template using moving mask, generate projections
                         #print(vol.shape, valid.shape)
                         vol = vol*((valid > 0).float() + 1e-3)
-                        image = torch.sum(vol, axis=-3).squeeze(1)
+                        image = torch.mean(vol, axis=-3).squeeze(1)*np.sqrt(vol.shape[-3]//2)
                     else:
                         raise RuntimeError("Not implemented")
                     # append sampled angles

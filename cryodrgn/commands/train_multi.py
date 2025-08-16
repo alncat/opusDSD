@@ -920,7 +920,7 @@ def main(args):
         start_epoch = 0
 
     # parallelize
-    if args.multigpu and torch.cuda.device_count() > 1:
+    if args.multigpu and torch.cuda.device_count() >= 1:
         if args.num_gpus is not None:
             num_gpus = min(args.num_gpus, torch.cuda.device_count())
         else:
