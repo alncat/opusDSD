@@ -283,7 +283,7 @@ The functionality of each argument is explained in the table:
 | --templateres | the size of output volume of our convolutional network, it will be further resampled by spatial transformer before projecting to 2D images. The default value is 192. You may keep it around ```D*downfrac/0.75```, which is larger than the input size. This corresponds to downsampling from the output volume of our network. You can tweak it to other resolutions, larger resolutions can generate sharper density maps, ***choices are Nx16, where N is integer between 8 and 16*** |
 | --plot | you can also specify this argument if you want to monitor how the reconstruction progress, our program will display the 2D reconstructions and experimental images after 8 times logging intervals. Namely, you switch to interative mode by including this. The interative mode should be run using command ```python -m cryodrgn.commands.train_cv```|
 | --tmp-prefix | the prefix of intermediate reconstructions, default value is ```tmp```. OPUS-DSD will output temporary reconstructions to the root directory of this program when training, whose names are ```$tmp-prefix.mrc``` |
-| --notinmem | this arguement let OPUS-DSD reading image stacks from hard disk during training, this is helpful when a huge dataset cannot fit in the memory, default is true |
+| --inmem | this arguement let OPUS-DSD reading image stacks into memory before training, default is false |
 | --accum-step | this argument controls the number of gradient accumulation steps during training, which increases the batch size by accum_step times |
 | --datadir | Path prefix to the image stack in star input|
 
@@ -311,7 +311,7 @@ dsd train_cv /work/all.mrcs --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --laz
 
 both are in the output directory
 
-During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. By default, opus-DSD reads all images into memory before training, so it may require some more host memories **To disable this behavior, you can include ```--notinmem``` into the training command**.
+During training, opus-DSD will output temporary volumes called ```tmp*.mrc``` (or the prefix you specified), you can check the intermediate results by viewing them in Chimera. Opus-DSD uses 3D volume as intermediate representation, so it requires larger amount of memory, v100 gpus will be sufficient for its training. Its training speed is slower, which requires 2 hours on 4 v100 gpus to finish one epoch on dataset with 20k images. By default, opus-DSD reads all images into pinned memory and multiple workers, **another option for dataloading is reading all images into memory before training, you can include ```--inmem``` into training command to enable this behavior**.
 
 ## train_multi for OPUS-DSD2 <div id="train_multi">
 

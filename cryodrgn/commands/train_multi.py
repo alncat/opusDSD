@@ -68,7 +68,7 @@ def add_args(parser):
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
     group.add_argument('--lazy-single', default=True, action='store_true', help='the dataloader for opus-DSD')
     group.add_argument('--second-order', default=False, action='store_true', help='Enabling second order correction when modelling dynamics (default: %(default)s)')
-    group.add_argument('--notinmem', default=True, action='store_true', help='Reading all images into memory (default: %(default)s)')
+    group.add_argument('--inmem', default=False, action='store_true', help='Reading all images into memory (default: %(default)s)')
 
     group = parser.add_argument_group('Tilt series')
     group.add_argument('--tilt', help='Particles (.mrcs)')
@@ -722,7 +722,7 @@ def main(args):
             data = dataset.LazyMRCData(args.particles, norm=args.norm,
                                        real_data=args.real_data, invert_data=args.invert_data,
                                        ind=ind, keepreal=args.use_real, window=False,
-                                       datadir=args.datadir, relion31=args.relion31, window_r=args.window_r, in_mem=(not args.notinmem))
+                                       datadir=args.datadir, relion31=args.relion31, window_r=args.window_r, in_mem=(args.inmem))
         else:
             raise NotImplementedError("Use --lazy-single for on-the-fly image loading")
 
@@ -946,9 +946,9 @@ def main(args):
     train_split, val_split = rand_split[:Nimg_train], rand_split[Nimg_train:]
     train_sampler = dataset.ClassSplitBatchSampler(args.batch_size, posetracker.poses_ind, train_split)
     val_sampler = dataset.ClassSplitBatchSampler(args.batch_size, posetracker.poses_ind, val_split)
-    if args.notinmem:
-        data_generator = DataLoader(data, batch_sampler=train_sampler, pin_memory=True, num_workers=16)
-        val_data_generator = DataLoader(data, batch_sampler=val_sampler, pin_memory=True, num_workers=16)
+    if not args.inmem:
+        data_generator = DataLoader(data, batch_sampler=train_sampler, pin_memory=False, num_workers=8)
+        val_data_generator = DataLoader(data, batch_sampler=val_sampler, pin_memory=False, num_workers=8)
     else:
         data_generator = DataLoader(data, batch_sampler=train_sampler)
         val_data_generator = DataLoader(data, batch_sampler=val_sampler)
