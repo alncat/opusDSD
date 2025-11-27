@@ -1,6 +1,5 @@
 # New updates!
-We have developed a structural heterogeneity resolving method for cryo-ET, **OPUS-TOMO**. Welcome to check out https://github.com/alncat/opusTomo! (The code in this repo supports multi-body dynamics, which follows the same training procedure as the multi-body dynamics for cryo-EM!) More updates are coming! We will release training codes using better parallelism instead of dataparallel from pytorch!
-
+We have developed a structural heterogeneity resolving method for cryo-ET, **OPUS-ET**. Welcome to check out https://github.com/alncat/opusTomo! (The code in this repo supports multi-body dynamics, which follows the same training procedure as the multi-body dynamics for cryo-EM!) 
 # Table of contents
 2. [Opus-DSD2](#opusdsd)
     1. [Spliceosome](#splice)
