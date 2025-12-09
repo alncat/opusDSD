@@ -14,5 +14,5 @@ pyerfa==2.0.1.1
 starfile==0.5.12
 seaborn==0.13.0
 adjusttext==1.3.0
-scikit-learn==1.3.2
+scikit-learn==1.5.0
 umap-learn==0.5.5
