@@ -100,10 +100,14 @@ After cloning the repository, to run this program, you need to have an environme
 You can create the conda environment for DSD using one of the environment files in the folder by executing
 
 ```
-conda env create --name dsd -f environmentcu11torch11.yml
+conda env create --name dsd -f environment.yml
 ```
 
-This environment primarily contains cuda 11.3 and pytorch 1.11.0. To create an environment with cuda 11.3 and pytorch 1.10.1, you can choose ```environmentcu11.yml```. Lastly, ```environment.yml``` contains cuda 10.2 and pytorch 1.11.0. On V100 GPU, OPUS-DSD with cuda 11.3 is 20% faster than OPUS-DSD with cuda 10.2. However, it's worth noting that OPUS-DSD **has not been tested on Pytorch version higher than 1.11.0**. We recommend using pytorch version 1.10.1 or 1.11.0. After the environment is sucessfully created, you can then activate it and execute our program within this environement.
+This environment primarily contains cuda 11.3 and pytorch 1.11.0. Alternatively, you can create an environment containing pytorch2.6.0 using 
+```
+conda env create --name dsd -f envtorch2.yml
+```
+. After the environment is sucessfully created, you can then activate it and execute our program within this environement.
 
 ```
 conda activate dsd
@@ -119,7 +123,7 @@ OPUS-DSD can be kept up to date by
 git pull
 ```
 
-The inference pipeline of our program can run on any GPU which supports cuda 10.2 or 11.3 and is fast to generate a 3D volume. However, the training of our program takes larger amount memory, we recommend using V100 GPUs at least.
+The inference pipeline of our program can run on any GPU which supports cuda and is fast to generate a 3D volume. However, the training of our program takes larger amount memory, we recommend using V100 GPUs at least.
 
 # prepare data <a name="preparation"></a>
 
@@ -256,6 +260,12 @@ dsd train_multi sp.star --ctf ./sp-ctf.pkl --poses ./sp-pose-euler.pkl --lazy-si
 ```
 You can prepend the correct prefix for image path in ```sp.star``` via ```--datadir```. If ```--datadir``` is not specified, the program will try to read images from the directory of ```sp.star```. **You should convert the starfile to Relion2 format for best compatability.**
 
+You can also use distributed data parallel for training, which is faster compared to previous methods,
+```
+torchrun --nproc_per_node=4 -m cryodrgn.commands.train_multi_dist /work/jpma/luo/spliceosome/all.mrcs --ctf /work/jpma/luo/spliceosome/consensus_data_ctf.pkl --poses /work/jpma/luo/spliceosome/consensus_data_pose_euler.pkl -n 20 -b 12 --zdim 12 --lr 1.2e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/jpma/luo/spliceosome/MaskCreate/job001/mask.mrc --split deep.pkl --lamb 1. --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/jpma/luo/spliceosome/Example/mask_test.pkl --zaffdim 6 
+```
+The above command will spawn 4 processes and bind one process to one GPU, hence requiring a 4GPU server. It is not recommend to include ```--plot``` when using ```train_multi_dist```, which might increase communication overhead and slowdown the training process.
+
 The argument following train_cv/train_multi specifies the image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is selected! Our program set the default values of those arguments to the values shown in above command.
 
@@ -322,6 +332,12 @@ dsd train_multi /work/all.mrcs --ctf /work/all_ctf.pkl --poses /work/all_pose_eu
 | --- | --- |
 | --zaffdim | controls the dimension of dynamics latent space |
 | --masks | the pkl file contains the parameters for bodies of the macromolecule|
+or
+
+```
+torchrun --nproc_per_node=4 -m cryodrgn.commands.train_multi_dist /work/jpma/luo/spliceosome/all.mrcs --ctf /work/jpma/luo/spliceosome/consensus_data_ctf.pkl --poses /work/jpma/luo/spliceosome/consensus_data_pose_euler.pkl -n 20 -b 12 --zdim 12 --lr 1.2e-4 --num-gpus 4 --multigpu --beta-control 2. -o ./ -r /work/jpma/luo/spliceosome/MaskCreate/job001/mask.mrc --split deep.pkl --lamb 1. --bfactor 3.75 --downfrac 0.75 --valfrac 0.25 --templateres 224 --masks /work/jpma/luo/spliceosome/Example/mask_test.pkl --zaffdim 6 
+```
+
 
 If you omit ```--masks``` in the train_multi command, OPUS-DSD2 will estimate a global pose correction instead (train_cv also does this).
 
