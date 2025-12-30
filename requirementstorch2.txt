@@ -36,5 +36,5 @@ tqdm==4.67.0
 typeguard==2.13.3
 typing-extensions==4.15.0
 umap-learn==0.5.5
-urllib3==2.5.0
+urllib3==2.6.0
 zstandard==0.23.0
