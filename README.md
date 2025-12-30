@@ -17,7 +17,9 @@ We have developed a structural heterogeneity resolving method for cryo-ET, **OPU
 
 # Opus-DSD2 <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
-Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://www.biorxiv.org/content/10.1101/2024.09.24.614854 and https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6. The tutorial for OPUS-DSD2 is avaible at this README file and the wiki page of this repo https://github.com/alncat/opusDSD/wiki/Multi%E2%80%90body-structural-disentanglement-in-OPUS%E2%80%90DSD2.  An exemplar movie of the OPUS-DSD2 is shown below:
+Prof. Jianpeng Ma at Fudan University. The preprint of OPUS-DSD2 is available at https://www.biorxiv.org/content/10.1101/2024.09.24.614854 and https://drive.google.com/drive/folders/1tEVu9PjCR-4pvkUK17fAHHpyw6y3rZcK?usp=sharing, while the publication of OPUS-DSD is available at https://www.nature.com/articles/s41592-023-02031-6. The tutorial for OPUS-DSD2 is avaible at this README file and the wiki page of this repo https://github.com/alncat/opusDSD/wiki/Multi%E2%80%90body-structural-disentanglement-in-OPUS%E2%80%90DSD2. OPUS-DSD2 supports different parallel training strategies. Notably, the newly implemented ```train_multi_dist``` supports distributed data parallel training, and achieves faster training speed. Check out [training](#training) and **wiki** for more details.
+
+An exemplar movie of the OPUS-DSD2 is shown below:
 
 https://github.com/alncat/opusDSD/assets/3967300/b1b4d3c0-dfed-494f-8b7c-1990b1107147
 
