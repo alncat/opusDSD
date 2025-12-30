@@ -213,7 +213,10 @@ def exp_quaternion(q):
 def rot_to_axis(R):
     quat = SO3_to_quaternions_wiki(R)
     axis = quat[..., 1:]
-    return torch.nn.functional.normalize(axis, p=2, dim=-1)
+    quat_norm = axis.norm(p=2, dim=-1, keepdim=False)
+    #angle in degree
+    angle = torch.atan2(quat_norm, quat[..., 0])*2/np.pi*180
+    return angle, torch.nn.functional.normalize(axis, p=2, dim=-1)
 
 def zrot(x):
     x = x*np.pi/180.
@@ -238,6 +241,62 @@ def yrot(x):
         zero, one, zero,
         sa, zero, ca
     ], -1).view(*x.shape, 3, 3)
+
+def xrot(x):
+    x = x*np.pi/180.
+    ca = x.cos()
+    sa = x.sin()
+    zero = torch.zeros_like(x)
+    one = torch.ones_like(x)
+    return torch.stack([
+        one, zero, zero,
+        zero, ca, -sa,
+        zero, sa, ca
+    ], -1).view(*x.shape, 3, 3)
+
+def skew_symmetric(u):
+    ux = u[..., 0]
+    uy = u[..., 1]
+    uz = u[..., 2]
+    zero = torch.zeros_like(ux)
+    K = torch.stack([
+    zero, -uz, uy,
+    uz, zero, -ux,
+    -uy, ux, zero
+    ], -1).view(*u.shape[:-1], 3, 3)
+    return K
+
+def axis_rot(x, u):
+    x = x*np.pi/180.
+    #normalize u
+    #u = u/u.norm(p=2, dim=-1, keepdim=True)
+    K = skew_symmetric(u)
+    K2 = K @ K
+    x = x.unsqueeze(-1).unsqueeze(-1)
+    R = torch.eye(3, device=u.device) + x.sin()*K + (1 - x.cos())*K2
+    #quat = torch.cat([(x.unsqueeze(-1)/2.).cos(), (x.unsqueeze(-1)/2.).sin()*u], dim=-1)
+    #R_quat = quaternions_to_SO3_wiki(quat)
+    #print( R_quat - R, R @ torch.transpose(R, -1, -2) )
+    return R
+
+def exp_se3(u_norm, n, trans):
+    #u (n, 3), trans (n, 3)
+    #u_norm = u.norm(p=2, dim=-1, keepdim=True)
+    #n = u/u_norm
+    u_deg = u_norm*180/np.pi
+    rot = axis_rot(u_deg.squeeze(-1), n)
+
+    sinc_u = torch.sinc(u_norm.unsqueeze(-1)).detach()
+    sinc_u_2 = torch.sinc(u_norm.unsqueeze(-1)*0.5).detach()
+
+    K = skew_symmetric(n)
+    #rot_theta = -sinc_u*(K @ K) + sinc_u_2.pow(2)*u_norm.unsqueeze(-1)*0.5*K
+    rot_theta = sinc_u_2.pow(2)*u_norm.unsqueeze(-1)*0.5*K
+    #print(n.shape, rot_theta.shape, trans.shape)
+    rot_center = rot_theta @ trans.unsqueeze(-1)
+    #libration = (1 - sinc_u)*(n.unsqueeze(-1) @ n.unsqueeze(-2)) @ trans.unsqueeze(-1) + trans.unsqueeze(-1)*sinc_u
+    libration = (1 - sinc_u)* K @ K @ trans.unsqueeze(-1) + trans.unsqueeze(-1)
+    return rot, (rot_center + libration).squeeze(-1)
 
 def euler_to_direction(euler):
     alpha = euler[...,0]*np.pi/180
@@ -417,7 +476,7 @@ def hopf_to_SO3(euler):
 FLT_EPSILON = np.single(1.19209e-07)
 
 def so3_to_euler(A):
-    abs_sb = np.sqrt(A[..., 0, 2] * A[..., 0, 2] + A[..., 1, 2] * A[..., 1, 2])
+    abs_sb = torch.sqrt(A[..., 0, 2] * A[..., 0, 2] + A[..., 1, 2] * A[..., 1, 2])
     gamma = torch.atan2(A[..., 1, 2], -A[..., 0, 2])
     alpha = torch.atan2(A[..., 2, 1], A[..., 2, 0])
     sign_sb = torch.where(torch.sin(gamma) > 0, torch.sign(A[..., 1, 2]), -torch.sign(A[..., 1, 2]))

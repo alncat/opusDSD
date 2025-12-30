@@ -143,7 +143,7 @@ def main(args):
 
     if args.load:
         log('Loading checkpoint from {}'.format(args.load))
-        checkpoint = torch.load(args.load)
+        checkpoint = torch.load(args.load, map_location="cuda:0")
         print(checkpoint.keys())
         pretrained_dict = checkpoint['model_state_dict']
         model_dict = model.state_dict()
@@ -202,14 +202,14 @@ def main(args):
             if vanilla:
                 #z = utils.load_pkl(args.zfile)
                 if not args.deform:
-                    z = np.loadtxt(args.zfile).reshape(-1, zdim)
+                    z = np.loadtxt(args.zfile)
                 else:
-                    template_z = np.loadtxt(args.template_z).reshape(-1, zdim)
+                    template_z = np.loadtxt(args.template_z)
                     len_template = template_z.shape[0]
                     assert args.template_z_ind < len_template, f"template-z-ind {args.template_z_ind} must be smaller than {len_template}"
                     template_z = torch.tensor(template_z[args.template_z_ind, :]).float().to(device)
                     log(template_z)
-                    z = np.loadtxt(args.zfile).reshape(-1, z_affine_dim)
+                    z = np.loadtxt(args.zfile)
                 z = torch.tensor(z).float().to(device)
             else:
                 z = np.loadtxt(args.zfile).reshape(-1, zdim)

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pickle
+import inspect
 import healpy as hp
 from sklearn.cluster import KMeans
 
@@ -11,7 +12,7 @@ log = utils.log
 
 class PoseTracker(nn.Module):
     def __init__(self, rots_np, trans_np=None, D=None, emb_type=None, deform=False, deform_emb_size=2, eulers_np=None,
-                 latents=None, batch_size=None, body_eulers_np=None, body_trans_np=None):
+                 latents=None, batch_size=None, body_eulers_np=None, body_trans_np=None, affine_dim=4):
         super(PoseTracker, self).__init__()
         rots = torch.tensor(rots_np).float()
         trans = torch.tensor(trans_np).float() if trans_np is not None else None
@@ -51,6 +52,12 @@ class PoseTracker(nn.Module):
             #    emb_data = torch.randn(rots.shape[0], deform_emb_size)
             #deform_emb.weight.data.copy_(emb_data)
             #self.deform_emb = deform_emb
+            #convert euler to rots
+            rots_from_euler = lie_tools.euler_to_SO3(self.eulers)
+            self.rots = rots_from_euler #overwrite old rots
+            self.rots_update = torch.eye(3).unsqueeze(0).repeat(self.rots.shape[0], 1, 1)
+            self.trans_update = torch.zeros_like(self.trans)
+            self.trans_o = self.trans.clone()
             # convert euler to hopf
             self.hopfs = lie_tools.euler_to_hopf(self.eulers)
             new_eulers = lie_tools.hopf_to_euler(self.hopfs)
@@ -64,11 +71,6 @@ class PoseTracker(nn.Module):
             #reset euler using hopf
             self.eulers = self.hopfs
             eulers_np = self.hopfs.cpu().numpy()
-            self.decoder_eulers = None
-            if self.decoder_eulers is not None:
-                #convert euler to hopf
-                self.decoder_eulers = lie_tools.euler_to_hopf(self.decoder_eulers)
-                print("hopf difference between encoder and decoder: ", torch.sum((self.eulers - self.decoder_eulers).abs())/self.hopfs.shape[0], self.hopfs.shape[0])
 
             euler0 = eulers_np[:, 0]*np.pi/180 #(-180, 180)
             euler1 = eulers_np[:, 1]*np.pi/180 #(0, 180)
@@ -88,11 +90,11 @@ class PoseTracker(nn.Module):
                 if "multi_mu" in latents:
                     self.multi_mu = latents["multi_mu"]
                 else:
-                    self.multi_mu = None #torch.randn(rots.shape[0], 4)
+                    self.multi_mu = torch.randn(rots.shape[0], affine_dim)
             else:
                 self.mu = torch.randn(rots.shape[0], self.deform_emb_size)
                 self.nearest_poses = [np.array([], dtype=np.int64) for i in range(len(euler_pixs))]
-                self.multi_mu = None #torch.randn(rots.shape[0], 4)
+                self.multi_mu = torch.randn(rots.shape[0], affine_dim)
             self.batch_size = batch_size
             print("nn: ", len(self.nearest_poses), "batch_size: ", self.batch_size)
             self.ns = [(len(x) // self.batch_size)*self.batch_size for x in self.poses_ind]
@@ -267,13 +269,6 @@ class PoseTracker(nn.Module):
     def set_emb(self, encodings, ind, mu=0.7):
         #when the encoding dim is larger, we knew the multi-body refinement is on
         if encodings.shape[-1] > self.deform_emb_size:
-            if self.multi_mu is None:
-                #initialize multi mu
-                self.multi_mu = torch.randn(len(self.mu), encodings.shape[-1] - self.deform_emb_size)
-                log(f"intializing multi_mu of {len(self.mu)}, {self.multi_mu.shape[-1]}")
-            if self.multi_mu.shape[-1] != encodings.shape[-1] - self.deform_emb_size:
-                self.multi_mu = torch.randn(len(self.mu), encodings.shape[-1] - self.deform_emb_size)
-                log(f"reintializing multi_mu of {len(self.mu)}, {self.multi_mu.shape[-1]}")
             self.mu[ind] = self.mu[ind]*mu + (1-mu)*encodings[:, :self.deform_emb_size].detach().cpu()
             self.multi_mu[ind] = self.multi_mu[ind]*mu + (1-mu)*encodings[:, self.deform_emb_size:].detach().cpu()
         else:
@@ -283,7 +278,7 @@ class PoseTracker(nn.Module):
         torch.save({"mu": self.mu, "nn": self.nearest_poses, "multi_mu": self.multi_mu}, filename)
 
     @classmethod
-    def load(cls, infile, Nimg, D, emb_type=None, ind=None, deform=False, deform_emb_size=2, latents=None, batch_size=None, decoder_infile=None):
+    def load(cls, infile, Nimg, D, emb_type=None, ind=None, deform=False, deform_emb_size=2, latents=None, batch_size=None, affine_dim=4):
         '''
         Return an instance of PoseTracker
 
@@ -304,10 +299,6 @@ class PoseTracker(nn.Module):
             poses = (utils.load_pkl(infile[0]), utils.load_pkl(infile[1]))
         else: # rotation pickle or poses pickle
             poses = utils.load_pkl(infile[0])
-            if decoder_infile is not None:
-                decoder_poses = utils.load_pkl(decoder_infile)
-            else:
-                decoder_poses = None
             if type(poses) != tuple: poses = (poses,)
 
         # rotations
@@ -330,7 +321,6 @@ class PoseTracker(nn.Module):
             trans *= D # convert from fraction to pixels
         elif len(poses) == 3:
             trans = poses[1]
-            decoder_trans = decoder_poses[1] if decoder_poses is not None else None
             if ind is not None:
                 if len(trans) > Nimg: # HACK
                     trans = trans[ind]
@@ -339,7 +329,6 @@ class PoseTracker(nn.Module):
             trans *= D # convert from fraction to pixels
             log("loaded eulers")
             eulers = poses[2]
-            decoder_eulers = decoder_poses[2] if decoder_poses is not None else None
             if ind is not None:
                 if len(trans) > Nimg: # HACK
                     eulers = eulers[ind]
@@ -370,18 +359,13 @@ class PoseTracker(nn.Module):
             eulers = None
 
         if latents is not None:
-            latents = torch.load(latents)
-        return cls(rots, trans, D, emb_type, deform, deform_emb_size, eulers, latents, batch_size, body_eulers_np=body_eulers, body_trans_np=body_trans)
+            load_kwargs = {}
+            if "weights_only" in inspect.signature(torch.load).parameters:
+                # PyTorch is new enough to support this arg (e.g. >= 2.x)
+                load_kwargs["weights_only"] = False  # or True, if you want safe weights-only loading
+            latents = torch.load(latents, **load_kwargs)
 
-    def save_decoder_pose(self, out_pkl):
-        r = self.rots.cpu().numpy()
-        t = self.decoder_trans.cpu().numpy()
-        t = t/self.D # convert from pixels to extent
-        # convert from hopf back to euler
-        new_eulers = lie_tools.hopf_to_euler(self.decoder_eulers)
-        e = new_eulers.cpu().numpy()
-        poses = (r,t,e)
-        pickle.dump(poses, open(out_pkl,'wb'))
+        return cls(rots, trans, D, emb_type, deform, deform_emb_size, eulers, latents, batch_size, body_eulers_np=body_eulers, body_trans_np=body_trans, affine_dim=affine_dim)
 
     def save(self, out_pkl):
         if self.emb_type == 'quat':
@@ -396,10 +380,19 @@ class PoseTracker(nn.Module):
                 t = self.trans.cpu().numpy()
             else:
                 t = self.trans_emb.weight.data.cpu().numpy()
+            #add update
+            t = self.trans_o.cpu().numpy() + self.trans_update.cpu().numpy()
             t = t/self.D # convert from pixels to extent
             if self.eulers is not None:
+                r = self.rots.cpu().numpy()
+                rots_to_save = self.rots @ self.rots_update
+                delta_angle, delta_axis = lie_tools.rot_to_axis(self.rots_update)
+                #convert rotation to hopfs
+                new_hopfs = lie_tools.so3_to_hopf(rots_to_save)
+                hopfs_diff = new_hopfs - self.hopfs
+                new_eulers = lie_tools.hopf_to_euler(new_hopfs)
                 # convert from hopf back to euler
-                new_eulers = lie_tools.hopf_to_euler(self.eulers)
+                #new_eulers = lie_tools.hopf_to_euler(self.eulers)
                 #e = self.eulers.cpu().numpy()
                 e = new_eulers.cpu().numpy()
                 poses = (r,t,e)
@@ -414,6 +407,30 @@ class PoseTracker(nn.Module):
         if self.emb_type is None:
             euler = self.eulers[ind]
             return euler
+
+    def set_pose(self, rots, trans, ind, mu=0.8):
+        #doing slerp in for rotation
+        rot_o = self.rots_update[ind]
+        #print(rots.shape, rot_o.shape)
+        delta_R = lie_tools.hopf_to_SO3(rots.squeeze(1).cpu())
+        delta_R = torch.transpose(rot_o, -1, -2) @ delta_R
+        #convert delta_R to axis angle
+        delta_angle, delta_axis = lie_tools.rot_to_axis(delta_R)
+        delta_R_mu = lie_tools.axis_rot(delta_angle*(1.-mu), delta_axis)
+        rot_n = rot_o @ delta_R_mu
+        #print(rot_n.shape, delta_R_mu.shape, trans.shape, rot_o.shape)
+        delta_t = self.rots[ind] @ trans.squeeze(1).unsqueeze(-1).cpu().float()
+        delta_t = delta_t.squeeze(-1).cpu()
+        #print(delta_angle, delta_axis, delta_t)#, delta_R_mu)
+        delta_angle, delta_axis = lie_tools.rot_to_axis(rot_n)
+        self.rots_update[ind] = rot_n.float()
+        self.trans_update[ind] = self.trans_update[ind]*mu + delta_t[:, :2]*(1-mu)
+        #update euler and trans
+        new_rots = self.rots[ind] @ self.rots_update[ind]
+        new_eulers = lie_tools.so3_to_hopf(new_rots)
+        self.eulers[ind] = new_eulers
+        self.trans[ind] = self.trans_o[ind] + self.trans_update[ind]
+        #print(delta_t, delta_angle, delta_axis)
 
     def set_euler(self, euler, ind):
         self.eulers[ind] = euler

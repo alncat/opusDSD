@@ -48,7 +48,8 @@ class HetOnlyVAE(nn.Module):
             window_r=0.85,
             masks_params=None,
             num_bodies=0,
-            z_affine_dim=4,):
+            z_affine_dim=4,
+            rank=0):
         super(HetOnlyVAE, self).__init__()
         self.lattice = lattice
         self.zdim = zdim
@@ -65,11 +66,13 @@ class HetOnlyVAE(nn.Module):
             in_vol_nonzeros = torch.nonzero(ref_vol)
             in_vol_mins, _ = in_vol_nonzeros.min(dim=0)
             in_vol_maxs, _ = in_vol_nonzeros.max(dim=0)
-            log("model: loading mask with nonzeros between {}, {}, {}".format(in_vol_mins, in_vol_maxs, ref_vol.shape))
+            if rank == 0:
+                log("model: loading mask with nonzeros between {}, {}, {}".format(in_vol_mins, in_vol_maxs, ref_vol.shape))
             in_vol_maxs = ref_vol.shape[-1] - in_vol_maxs
             in_vol_min = min(in_vol_maxs.min(), in_vol_mins.min())
             mask_frac = (ref_vol.shape[-1] - in_vol_min*2 + 4) / ref_vol.shape[-1]
-            log("model: masking volume using fraction: {}".format(mask_frac))
+            if rank == 0:
+                log("model: masking volume using fraction: {}".format(mask_frac))
             self.window_r = min(mask_frac, 0.9)
             if templateres == 256:
                 self.window_r = min(self.window_r, 0.9)
@@ -82,7 +85,8 @@ class HetOnlyVAE(nn.Module):
         self.encoder_crop_size = self.down_vol_size
         self.encoder_image_size = int(self.render_size*self.encoder_crop_size/self.down_vol_size)//2*2
         assert self.encoder_image_size == self.render_size
-        log("model: image supplemented into neural network will be of size {}".format(self.encoder_image_size))
+        if rank == 0:
+            log("model: image supplemented into neural network will be of size {}".format(self.encoder_image_size))
         self.ref_vol = ref_vol
 
         if encode_mode == 'resid':
@@ -108,7 +112,7 @@ class HetOnlyVAE(nn.Module):
         elif encode_mode == 'grad':
             self.encoder = Encoder(self.zdim, lattice.D, crop_vol_size=self.encoder_crop_size,
                                    in_mask=ref_vol, window_r=self.window_r,
-                                   render_size=self.encoder_image_size, z_affine_dim=self.z_affine_dim)
+                                   render_size=self.encoder_image_size, z_affine_dim=self.z_affine_dim, rank=rank)
             self.fixed_deform = True
         else:
             raise RuntimeError('Encoder mode {} not recognized'.format(encode_mode))
@@ -128,7 +132,7 @@ class HetOnlyVAE(nn.Module):
                                    symm=self.symm, ctf_grid=ctf_grid,
                                    fixed_deform=self.fixed_deform, deform_emb_size=self.deform_emb_size,
                                    render_size=self.render_size, down_vol_size=self.down_vol_size, tmp_prefix=tmp_prefix,
-                                   masks_params=self.masks_params, num_bodies=self.num_bodies, z_affine_dim=self.z_affine_dim)
+                                   masks_params=self.masks_params, num_bodies=self.num_bodies, z_affine_dim=self.z_affine_dim, rank=rank)
 
     @classmethod
     def load(self, config, weights=None, device=None):
@@ -277,7 +281,7 @@ class HetOnlyVAE(nn.Module):
         #decout["y_ref"] = y_ref
         # substract reconstruction to form diff image
         images = decout["y_recon"]
-        rnd_factor = torch.rand([images.shape[0], 1, 1, 1], device=images.device)*0.2
+        #rnd_factor = torch.rand([images.shape[0], 1, 1, 1], device=images.device)*0.2
         decout["y_recon_mean"] = images.detach().mean(dim=1, keepdim=True)
         #decout["y_ref"] -= decout["y_recon_mean"]*rnd_factor
         #decout["y_ref"] /= (1. - rnd_factor)
@@ -338,7 +342,7 @@ def load_decoder(config, weights=None, device=None):
 def get_decoder(in_dim, D, layers, dim, domain, enc_type, enc_dim=None, activation=nn.ReLU, templateres=128,
                 ref_vol=None, Apix=1., template_type=None, warp_type=None,
                 symm=None, ctf_grid=None, fixed_deform=False, deform_emb_size=2, render_size=140,
-                down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4):
+                down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4, rank=0):
     if enc_type == 'none':
         if domain == 'hartley':
             model = ResidLinearMLP(in_dim, layers, dim, 1, activation)
@@ -353,7 +357,7 @@ def get_decoder(in_dim, D, layers, dim, domain, enc_type, enc_dim=None, activati
                               deform_emb_size=deform_emb_size,
                               zdim=in_dim - 3, render_size=render_size,
                               down_vol_size=down_vol_size, tmp_prefix=tmp_prefix, masks_params=masks_params, num_bodies=num_bodies,
-                              z_affine_dim=z_affine_dim)
+                              z_affine_dim=z_affine_dim, rank=rank)
     else:
         model = PositionalDecoder if domain == 'hartley' else FTPositionalDecoder
         return model(in_dim, D, layers, dim, activation, enc_type=enc_type, enc_dim=enc_dim)
@@ -391,11 +395,11 @@ class ConvTemplate(nn.Module):
             self.affine_head = nn.Linear(self.affine_hidden, (num_bodies+1)*6)
             torch.nn.init.zeros_(self.affine_head.weight)
             torch.nn.init.zeros_(self.affine_head.bias)
-            if num_bodies > 0:
-                #self.second_order_out = nn.Sequential(nn.Linear(self.z_affine_dim, self.affine_hidden//2), nn.LeakyReLU(0.2), nn.Linear(self.affine_hidden//2, (num_bodies)*15))
-                self.second_order_head = nn.Linear(self.affine_hidden, (num_bodies)*15)
-                torch.nn.init.zeros_(self.second_order_head.weight)
-                torch.nn.init.zeros_(self.second_order_head.bias)
+            #if num_bodies > 0:
+            #    #self.second_order_out = nn.Sequential(nn.Linear(self.z_affine_dim, self.affine_hidden//2), nn.LeakyReLU(0.2), nn.Linear(self.affine_hidden//2, (num_bodies)*15))
+            #    self.second_order_head = nn.Linear(self.affine_hidden, (num_bodies)*15)
+            #    torch.nn.init.zeros_(self.second_order_head.weight)
+            #    torch.nn.init.zeros_(self.second_order_head.bias)
             self.use_affine = True
         template2 = []
         inchannels, outchannels = 2048, 1024
@@ -405,36 +409,36 @@ class ConvTemplate(nn.Module):
         inchannels, outchannels = 1024, 512
         template2.append(nn.ConvTranspose3d(inchannels, outchannels, 2, 2, 0))
         template2.append(nn.LeakyReLU(0.2))
-        if self.templateres != templateres:
-            self.template2 = nn.Sequential(*template2)
+        #if self.templateres != templateres:
+        self.template2 = nn.Sequential(*template2)
 
-            inchannels, outchannels = 512, 256
-            template3 = []
-            template4 = []
-            for i in range(int(np.log2(templateres)) - 3):
-                if i < 2: #2:
-                    template3.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
-                    template3.append(nn.LeakyReLU(0.2))
-                else:
-                    template4.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
-                    template4.append(nn.LeakyReLU(0.2))
-                inchannels = outchannels
-                outchannels = inchannels//2 #max(inchannels // 2, 16)
-            self.template3 = nn.Sequential(*template3)
-            self.template4 = nn.Sequential(*template4)
-            for m in [self.template1, self.template2, self.template3, self.template4]:
-                utils.initseq(m)
-        else:
-            inchannels, outchannels = 512, 256
-            for i in range(int(np.log2(templateres)) - 3):
-                template2.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
-                template2.append(nn.LeakyReLU(0.2))
-                inchannels = outchannels
-                outchannels = inchannels//2 #max(inchannels // 2, 16)
-            self.template2 = nn.Sequential(*template2)
-            self.template3 = self.template4 = []
-            for m in [self.template1, self.template2]:
-                utils.initseq(m)
+        inchannels, outchannels = 512, 256
+        template3 = []
+        template4 = []
+        for i in range(int(np.log2(templateres)) - 3):
+            if i < 2: #2:
+                template3.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
+                template3.append(nn.LeakyReLU(0.2))
+            else:
+                template4.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
+                template4.append(nn.LeakyReLU(0.2))
+            inchannels = outchannels
+            outchannels = inchannels//2 #max(inchannels // 2, 16)
+        self.template3 = nn.Sequential(*template3)
+        self.template4 = nn.Sequential(*template4)
+        for m in [self.template1, self.template2, self.template3, self.template4]:
+            utils.initseq(m)
+        #else:
+        #    inchannels, outchannels = 512, 256
+        #    for i in range(int(np.log2(templateres)) - 3):
+        #        template2.append(nn.ConvTranspose3d(inchannels, outchannels, 4, 2, 1))
+        #        template2.append(nn.LeakyReLU(0.2))
+        #        inchannels = outchannels
+        #        outchannels = inchannels//2 #max(inchannels // 2, 16)
+        #    self.template2 = nn.Sequential(*template2)
+        #    self.template3 = self.template4 = []
+        #    for m in [self.template1, self.template2]:
+        #        utils.initseq(m)
 
         self.conv_out = nn.ConvTranspose3d(inchannels, 1, 4, 2, 1)
         #self.conv_out = nn.Conv3d(inchannels, 1, 3, 1, 1)
@@ -456,23 +460,23 @@ class ConvTemplate(nn.Module):
             #affine = self.affine_out(encoding[..., self.zdim:]).view(-1, (self.num_bodies+1), 6)
             aff0 = self.affine_common(encoding[..., self.zdim:])
             affine = self.affine_head(aff0).view(-1, (self.num_bodies+1), 6)
-            if self.num_bodies > 0:
-                #second_order = self.second_order_out(encoding[..., self.zdim:]).view(-1, self.num_bodies, 5, 3)
-                second_order = self.second_order_head(aff0).view(-1, self.num_bodies, 5, 3)
-            else:
-                second_order = None
+            #if self.num_bodies > 0:
+            #    #second_order = self.second_order_out(encoding[..., self.zdim:]).view(-1, self.num_bodies, 5, 3)
+            #    second_order = self.second_order_head(aff0).view(-1, self.num_bodies, 5, 3)
+            #else:
+            second_order = None
             one = torch.ones_like(affine[..., :1])*16.
             quat = torch.cat([one, affine[..., :3]], dim=-1)
             #quat = lie_tools.exp_quaternion(affine[..., :3])
             trans = affine[..., 3:]
             affine = (quat, trans, second_order)
-        if self.templateres != 256:
-            template3 = self.template3(template2) #(B, 64, 32, 32, 32)
-            #can revise this to achieve other resolutions, current output of size 24*2^3
-            template3 = F.interpolate(template3, size=self.intermediate_size, mode="trilinear", align_corners=ALIGN_CORNERS)
-            template4 = self.template4(template3)
-        else:
-            template4 = template2
+        #if self.templateres != 256:
+        template3 = self.template3(template2) #(B, 64, 32, 32, 32)
+        #can revise this to achieve other resolutions, current output of size 24*2^3
+        template3 = F.interpolate(template3, size=self.intermediate_size, mode="trilinear", align_corners=ALIGN_CORNERS)
+        template4 = self.template4(template3)
+        #else:
+        #    template4 = template2
 
         return self.conv_out(template4), affine
 
@@ -507,7 +511,7 @@ class AffineMixWeight(nn.Module):
         return out
 
 class Encoder(nn.Module):
-    def __init__(self, zdim, D, crop_vol_size, in_mask=None, window_r=None, render_size=None, z_affine_dim=4):
+    def __init__(self, zdim, D, crop_vol_size, in_mask=None, window_r=None, render_size=None, z_affine_dim=4, rank=0):
         super(Encoder, self).__init__()
 
         self.zdim = zdim
@@ -520,7 +524,8 @@ class Encoder(nn.Module):
         self.transformer_e = SpatialTransformer(self.crop_vol_size, render_size=self.crop_vol_size)
         #self.out_dim = (self.crop_vol_size)//128 + 1
         self.out_dim = 1
-        log("encoder: the input image size is {}".format(self.crop_vol_size))
+        if rank == 0:
+            log("encoder: the input image size is {}".format(self.crop_vol_size))
 
         self.x_size = self.render_size//2 + 1
         y_idx = torch.arange(-self.x_size+1, self.x_size-1)/float(self.render_size) #[-0.5, 0.5)
@@ -530,17 +535,20 @@ class Encoder(nn.Module):
         ygrid = grid[0]
         grid2d = torch.stack((xgrid, ygrid), dim=-1).unsqueeze(0)
         self.register_buffer("freqs2d", grid2d)
-        log("create a 2d frequency grid {}".format(self.freqs2d.shape))
+        if rank == 0:
+            log("create a 2d frequency grid {}".format(self.freqs2d.shape))
         #print(self.freqs2d)
 
         #downsample mask
         if in_mask is not None:
             crop_mask_size = (int(in_mask.shape[-1]*self.window_r)//2)*2 #(self.crop_vol_size/128) previous default
-            log("encoder: cropping mask from {} to {} using window {}".format(in_mask.shape, crop_mask_size, self.window_r))
+            if rank == 0:
+                log("encoder: cropping mask from {} to {} using window {}".format(in_mask.shape, crop_mask_size, self.window_r))
             in_mask = self.transformer_e.crop(in_mask, crop_mask_size).unsqueeze(0).unsqueeze(0)
             # downsample
             in_mask = self.transformer_e.sample(in_mask)
-            log("encoder: downsampling mask from {} to {}".format(crop_mask_size, in_mask.shape))
+            if rank == 0:
+                log("encoder: downsampling mask from {} to {}".format(crop_mask_size, in_mask.shape))
             self.register_buffer("in_mask", in_mask)
             self.use_mask = True
         else:
@@ -913,7 +921,7 @@ class SpatialTransformer(nn.Module):
         else:
             mask_weights = torch.exp(-0.2*(roted.detach().pow(2)/radius**2).sum(dim=-1, keepdim=True)) + 1e-5
         #print(mask_weights, radius)
-        #mask_weights /= mask_weights.sum(dim=0, keepdim=True)
+        mask_weights /= mask_weights.sum(dim=0, keepdim=True)
         assert mask_weights.shape == torch.Size([coms.shape[0], grid_size, grid_size, grid_size, 1])
         # compute the final grid as \sum w_i*Delta_i + x
         body_grid = (mask_weights*(roted + (tcom + tbody.unsqueeze(1)).unsqueeze(1).unsqueeze(1) - grid_rot)) \
@@ -1050,7 +1058,7 @@ class SpatialTransformer(nn.Module):
 class VanillaDecoder(nn.Module):
     def __init__(self, D, in_vol=None, Apix=1., template_type=None, templateres=256, warp_type=None, symm_group=None,
                  ctf_grid=None, fixed_deform=False, deform_emb_size=2, zdim=8, render_size=140,
-                 use_fourier=False, down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4):
+                 use_fourier=False, down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4, rank=0):
         super(VanillaDecoder, self).__init__()
         self.D = D
         self.vol_size = (D - 1)
@@ -1090,7 +1098,8 @@ class VanillaDecoder(nn.Module):
                 self.num_bodies = num_bodies
                 # scale first transform to pixel in render size, then transform to the fraction w.r.t the cropping size
                 self.scale = self.render_size/(self.crop_vol_size - 1)*2.
-                log(f"decoder: render_size {self.render_size}, crop_vol_size {self.crop_vol_size}, scale {self.scale}")
+                if rank == 0:
+                    log(f"decoder: render_size {self.render_size}, crop_vol_size {self.crop_vol_size}, scale {self.scale}")
                 if masks_params is not None:
                     self.num_bodies = masks_params["com_bodies"].shape[0]
                     #remove com from relatives
@@ -1104,10 +1113,11 @@ class VanillaDecoder(nn.Module):
                     self.register_buffer("A_rot90", lie_tools.yrot(torch.tensor(-90)))
                     #scale change the original scale in render_size to the volume size after cropping
                     self.register_buffer("radius", masks_params["radii_bodies"]/self.vol_size)
-                    log(f"decoder: com of bodies are {self.com_bodies}, rg of bodies are {self.radius*self.scale}, scale is {self.scale}")
-                    log(f"decoder: rotate_directions are {self.rotate_directions}")
-                    log(f"orient_bodies are {self.orient_bodies}")
-                    log(f"decoder: principal_axesT are {self.principal_axesT}")
+                    if rank == 0:
+                        log(f"decoder: com of bodies are {self.com_bodies}, rg of bodies are {self.radius*self.scale}, scale is {self.scale}")
+                        log(f"decoder: rotate_directions are {self.rotate_directions}")
+                        log(f"orient_bodies are {self.orient_bodies}")
+                        log(f"decoder: principal_axesT are {self.principal_axesT}")
                 self.template = ConvTemplate(in_dim=self.zdim, templateres=self.templateres, affine=True, num_bodies=self.num_bodies,
                                              z_affine_dim=self.z_affine_dim)
         else:
@@ -1132,7 +1142,8 @@ class VanillaDecoder(nn.Module):
             #self.register_buffer("ref_mask", torch.tensor([0.]))
 
             if in_vol is not None:
-                log("decoder: loading mask {}, volume render size is {}, volume of interest is {}".format(in_vol.shape, self.render_size, self.crop_vol_size))
+                if rank == 0:
+                    log("decoder: loading mask {}, volume render size is {}, volume of interest is {}".format(in_vol.shape, self.render_size, self.crop_vol_size))
                 #resample input mask to render_size
                 mask_frac = (self.crop_vol_size - 2)/self.render_size
                 crop_size = int(in_vol.shape[-1]*mask_frac)//2*2
@@ -1141,24 +1152,29 @@ class VanillaDecoder(nn.Module):
                 in_vol_nonzeros = torch.nonzero(crop_vol.squeeze())
                 in_vol_mins, _ = in_vol_nonzeros.min(dim=0)
                 in_vol_maxs, _ = in_vol_nonzeros.max(dim=0)
-                log("decoder: cropped mask with nonzeros between {}, {}, {}".format(in_vol_mins, in_vol_maxs, crop_vol.shape))
+                if rank == 0:
+                    log("decoder: cropped mask with nonzeros between {}, {}, {}".format(in_vol_mins, in_vol_maxs, crop_vol.shape))
                 in_vol_maxs = crop_vol.shape[-1] - in_vol_maxs
                 self.vol_bound = torch.minimum(in_vol_maxs, in_vol_mins).float()
                 self.vol_bound *= (self.templateres/crop_vol.shape[-1]) #(templateres is the size of output volume)
                 self.vol_bound = self.vol_bound.int() + 1
-                log("decoder: setting volume boundary to {}".format(self.vol_bound))
+                if rank == 0:
+                    log("decoder: setting volume boundary to {}".format(self.vol_bound))
 
                 crop_vol = self.transformer.sample(crop_vol)
-                log("decoder: cropping mask from {} to {}, cropping fraction is {}, downsample to {}".format(in_vol.shape[-1], crop_size, mask_frac, crop_vol.shape))
+                if rank == 0:
+                    log("decoder: cropping mask from {} to {}, cropping fraction is {}, downsample to {}".format(in_vol.shape[-1], crop_size, mask_frac, crop_vol.shape))
                 self.register_buffer("ref_mask", crop_vol)
 
                 if masks_params is not None:
                     # crop and downsample mask weights
-                    log(f"decoder: radius of coms are {(self.com_bodies/self.vol_size*self.scale).norm(dim=-1)}")
+                    if rank == 0:
+                        log(f"decoder: radius of coms are {(self.com_bodies/self.vol_size*self.scale).norm(dim=-1)}")
 
                 apix_ori = self.Apix
                 self.Apix = self.vol_size/self.render_size*self.Apix
-                log("decoder: downsampling apix from {} to {}".format(apix_ori, self.Apix))
+                if rank == 0:
+                    log("decoder: downsampling apix from {} to {}".format(apix_ori, self.Apix))
                 #self.ref_mask_com = (self.transformer.grid*self.ref_mask.unsqueeze(-1)).mean(dim=(0, 1, 2, 3, 4))
                 #print(self.ref_mask_com)
             else:
@@ -1262,140 +1278,6 @@ class VanillaDecoder(nn.Module):
         neighbor_euler1 = torch.tensor(neighbor_euler1).float().to(coords.get_device())/np.pi*180
 
         neighbor_eulers = torch.stack([neighbor_euler0, neighbor_euler1], dim=-1) #(s, neighbor, 2)
-        #flatten eulers
-        neighbor_eulers_flatten = neighbor_eulers.view(-1, 2) #(s*neighbor, 2)
-        return neighbor_eulers_flatten
-
-    def get_neighbor_hopfs(self, coords, hp_order=64):
-        euler0 = coords[:, 0].cpu().numpy()*np.pi/180 #(-180, 180)
-        euler1 = coords[:, 1].cpu().numpy()*np.pi/180 #(0, 180)
-
-        neighbor_pixs = hp.get_all_neighbours(hp_order//2, euler1, euler0, nest=True)
-        #euler_pixs = hp.ang2pix(hp_order//2, euler1, euler0, nest=True)
-        #neighbor_pixs = np.arange(4)[None, :] + 4*euler_pixs[:, None]
-
-        neighbor_pixs = neighbor_pixs.flatten()
-        neighbor_pixs = neighbor_pixs[neighbor_pixs != -1]
-        n_length = neighbor_pixs.shape[-1]
-        neighbor_euler1, neighbor_euler0 = hp.pix2ang(hp_order//2, neighbor_pixs, nest=True)
-
-        pixrad = hp.max_pixrad(hp_order//2)
-        n_sample = 13
-        R = lie_tools.hopf_to_SO3(coords.cpu())
-
-        if n_length < n_sample:
-            # convert to hopf
-            rand_z = lie_tools.random_direction(n_sample - n_length, pixrad*4.*180/np.pi)
-            rand_z = torch.transpose(R, -2, -1) @ rand_z.unsqueeze(-1)
-            rand_z = rand_z.squeeze(-1)
-            # to radian
-            rand_e = lie_tools.direction_to_hopf(rand_z)*np.pi/180
-            rand_angle0 = rand_e[..., 0].cpu().numpy()
-            rand_angle1 = rand_e[..., 1].cpu().numpy()
-
-            #euler_pixs_coarse = hp.ang2pix(hp_order//4, euler1, euler0, nest=True)
-            #neighbor_pixs = np.arange(4)[None, :] + 4*euler_pixs_coarse[:, None]
-            #neighbor_pixs = neighbor_pixs.flatten()
-            #neighbor_euler1_c, neighbor_euler0_c = hp.pix2ang(hp_order//2, neighbor_pixs, nest=True)
-            #neighbor_euler0_c = torch.tensor(neighbor_euler0_c).float().to(coords.get_device())/np.pi*180 #(s)
-            #neighbor_euler1_c = torch.tensor(neighbor_euler1_c).float().to(coords.get_device())/np.pi*180
-
-            neighbor_euler0 = np.concatenate([neighbor_euler0, rand_angle0], axis=-1)
-            neighbor_euler1 = np.concatenate([neighbor_euler1, rand_angle1], axis=-1)
-            neighbor_euler0 = np.concatenate([neighbor_euler0, euler0], axis=-1)
-            neighbor_euler1 = np.concatenate([neighbor_euler1, euler1], axis=-1)
-
-        neighbor_euler0 = torch.tensor(neighbor_euler0).float().to(coords.get_device())/np.pi*180 #(s)
-        neighbor_euler1 = torch.tensor(neighbor_euler1).float().to(coords.get_device())/np.pi*180
-
-        neighbor_eulers = torch.stack([neighbor_euler0, neighbor_euler1], dim=-1) #(s, neighbor, 2)
-        #flatten eulers
-        neighbor_eulers_flatten = neighbor_eulers.view(-1, 2) #(s*neighbor, 2)
-        return neighbor_eulers_flatten
-
-    def get_neighbor_eulers(self, coords, hp_order=64):
-        euler0 = coords[:, 0].cpu().numpy()*np.pi/180 #(-180, 180)
-        euler1 = coords[:, 1].cpu().numpy()*np.pi/180 #(0, 180)
-
-        neighbor_pixs = hp.get_all_neighbours(hp_order//2, euler1, euler0, nest=True)
-        #euler_pixs = hp.ang2pix(hp_order//2, euler1, euler0, nest=True)
-        #neighbor_pixs = np.arange(4)[None, :] + 4*euler_pixs[:, None]
-
-        neighbor_pixs = neighbor_pixs.flatten()
-        neighbor_pixs = neighbor_pixs[neighbor_pixs != -1]
-        #n_length = neighbor_pixs.shape[-1]
-        #neighbor_euler1, neighbor_euler0 = hp.pix2ang(hp_order//2, neighbor_pixs, nest=True)
-
-        neighbor_euler0 = euler0
-        neighbor_euler1 = euler1
-        n_length = 1
-
-        pixrad = hp.max_pixrad(hp_order//2)
-        n_sample = 12
-        if n_length < n_sample:
-            #rand_angle0 = (np.random.rand(n_sample - n_length) - 0.5)*pixrad + euler0
-            #rand_angle1 = (np.random.rand(n_sample - n_length) - 0.5)*pixrad + euler1
-
-            R = lie_tools.euler_to_SO3(coords.cpu())
-            # convert to hopf
-            hopf = lie_tools.euler_to_hopf(coords.cpu())
-            #print(hopf, coords)
-            R_h = lie_tools.hopf_to_SO3(hopf)
-            #print(coords, hopf, lie_tools.hopf_to_euler(hopf))
-            #print(R - R_h, R_h @ torch.transpose(R_h, -2, -1))
-            hopf = lie_tools.direction_to_hopf(R[...,2,:])
-            #print(hopf)
-            #z = torch.tensor([0., 0., 1.])
-            rand_z = lie_tools.random_direction(n_sample - n_length, pixrad*4.*180/np.pi)
-            rand_z = torch.transpose(R, -2, -1) @ rand_z.unsqueeze(-1)
-            rand_z = rand_z.squeeze(-1)
-            #v = lie_tools.euler_to_direction(coords.cpu())
-            #e = lie_tools.direction_to_euler(v)
-            # to radian
-            rand_e = lie_tools.direction_to_euler(rand_z)*np.pi/180
-            rand_angle0 = rand_e[..., 0].cpu().numpy()
-            rand_angle1 = rand_e[..., 1].cpu().numpy()
-            #print((R @ v.unsqueeze(-1)).squeeze(-1))
-            #print(rand_e - e, e - coords.cpu(), torch.acos((rand_z*v).sum(-1))/np.pi*180)
-            #rand_so3 = lie_tools.random_biased_SO3(2, bias=20) @ R
-            #rso3 = torch.transpose(rand_so3, -1, -2)
-            #d = torch.sum(torch.diagonal(rso3 @ R, dim1=-2, dim2=-1), dim=-1)
-            #print(d, torch.acos(d/2. - .5)*180/np.pi)
-            #rand_e = lie_tools.so3_to_euler(rand_so3.cpu().numpy())
-            #rand_angle0 = np.mod(rand_angle0, 2*np.pi)
-            #rand_angle1 = np.mod(rand_angle1, np.pi)
-            #euler_pixs_coarse = hp.ang2pix(hp_order//4, euler1, euler0, nest=True)
-            #neighbor_pixs = np.arange(4)[None, :] + 4*euler_pixs_coarse[:, None]
-            #neighbor_pixs = neighbor_pixs.flatten()
-            #neighbor_euler1_c, neighbor_euler0_c = hp.pix2ang(hp_order//2, neighbor_pixs, nest=True)
-            #neighbor_euler0_c = torch.tensor(neighbor_euler0_c).float().to(coords.get_device())/np.pi*180 #(s)
-            #neighbor_euler1_c = torch.tensor(neighbor_euler1_c).float().to(coords.get_device())/np.pi*180
-
-            #print(rand_angle0, rand_angle1, euler0, euler1)
-            neighbor_euler0 = np.concatenate([neighbor_euler0, rand_angle0], axis=-1)
-            neighbor_euler1 = np.concatenate([neighbor_euler1, rand_angle1], axis=-1)
-            #neighbor_euler0 = np.concatenate([neighbor_euler0, euler0], axis=-1)
-            #neighbor_euler1 = np.concatenate([neighbor_euler1, euler1], axis=-1)
-
-        neighbor_euler0 = torch.tensor(neighbor_euler0).float().to(coords.get_device())/np.pi*180 #(s)
-        neighbor_euler1 = torch.tensor(neighbor_euler1).float().to(coords.get_device())/np.pi*180
-
-        # sample euler at a coarser level
-        #euler_pixs_coarse = hp.ang2pix(hp_order//4, euler1, euler0, nest=True)
-        #neighbor_pixs = np.arange(4)[None, :] + 4*euler_pixs_coarse[:, None]
-        #neighbor_pixs = neighbor_pixs.flatten()
-        #neighbor_euler1_c, neighbor_euler0_c = hp.pix2ang(hp_order//2, neighbor_pixs, nest=True)
-        #neighbor_euler0_c = torch.tensor(neighbor_euler0_c).float().to(coords.get_device())/np.pi*180 #(s)
-        #neighbor_euler1_c = torch.tensor(neighbor_euler1_c).float().to(coords.get_device())/np.pi*180
-
-        #neighbor_euler0 = torch.cat([neighbor_euler0, neighbor_euler0_c], dim=0)
-        #neighbor_euler1 = torch.cat([neighbor_euler1, neighbor_euler1_c], dim=0)
-
-        #neighbor_euler0 = torch.cat([coords[:, 0].float(), neighbor_euler0], dim=-1)
-        #neighbor_euler1 = torch.cat([coords[:, 1].float(), neighbor_euler1], dim=-1)
-
-        neighbor_eulers = torch.stack([neighbor_euler0, neighbor_euler1], dim=-1) #(s, neighbor, 2)
-        #print(neighbor_eulers)
         #flatten eulers
         neighbor_eulers_flatten = neighbor_eulers.view(-1, 2) #(s*neighbor, 2)
         return neighbor_eulers_flatten
@@ -1512,7 +1394,7 @@ class VanillaDecoder(nn.Module):
 
                         #reset rot to local samples
                         zero_eulers = torch.zeros_like(euler01)
-                        local_sample = self.get_particle_hopfs(zero_eulers, hp_order=64, depth=0) #hp_order=64, depth=0)
+                        local_sample = self.get_particle_hopfs(zero_eulers, hp_order=64, depth=0)
                         rot = lie_tools.hopf_to_SO3(local_sample).unsqueeze(1).unsqueeze(1)
 
                         i_euler = torch.cat([euler_i[..., :2], rand_ang], dim=-1)
@@ -1542,13 +1424,18 @@ class VanillaDecoder(nn.Module):
                             # rot_i = rot_i @ rot_resi_i[self.num_bodies:, ...].unsqueeze(1).unsqueeze(1)
                             global_trans_i = affine[1][i, self.num_bodies:, ...]
                             #print(rot_resi_i, body_trans_i)
+                            rot_i_correction = lie_tools.so3_to_hopf(rot_resi_i[self.num_bodies:,...])
+                            #save estimated global pose
+                            body_rots_pred.append(rot_i_correction)
+                            body_trans_pred.append(global_trans_i)
+
                             rot_resi_i = self.orient_bodiesT @ rot_resi_i[:self.num_bodies, ...] @ self.orient_bodies
                             #rot_resi_i = self.principal_axesT @ rot_resi_i[:self.num_bodies, ...] @ self.principal_axes
                             # rotate com according to rotate direction
                             body_trans_i = self.orient_bodiesT @ body_trans_i[:self.num_bodies, ...] @ self.orient_bodies
                             body_trans_i = (body_trans_i @ self.rotate_directions.unsqueeze(-1)) - self.rotate_directions.unsqueeze(-1)
                             body_trans_i = body_trans_i.squeeze(-1)
-                            body_rots_pred.append(rot_resi_i)
+                            #body_rots_pred.append(rot_resi_i)
                             #zero_eulers = torch.zeros_like(euler01)
                             #local_sample = self.get_particle_hopfs(zero_eulers, hp_order=64, depth=0) #hp_order=64, depth=0)
                             #rot = lie_tools.hopf_to_SO3(local_sample).unsqueeze(1).unsqueeze(1)
@@ -1565,7 +1452,7 @@ class VanillaDecoder(nn.Module):
                                 affine_grid_i, valid, trans_img = self.transformer.multi_sh_grid(rot_i, rot_resi_i, self.com_bodies/self.vol_size,
                                                                              t_i_3d, body_trans_i, radius=self.radius, axes=self.principal_axesT)
 
-                            body_trans_pred.append(trans_img[..., :2]*self.vol_size/self.scale)
+                            #body_trans_pred.append(trans_img[..., :2]*self.vol_size/self.scale)
                             pos = self.transformer.rotate(rot_i)
                             valid = F.grid_sample(self.ref_mask, pos, align_corners=ALIGN_CORNERS).detach()
                         else:
@@ -1588,9 +1475,11 @@ class VanillaDecoder(nn.Module):
                             else:
                                 valid = None
                             # convert body_rots_pred to hopf_angles
-                            rot_i_pred = lie_tools.so3_to_hopf(rot_i)
+                            #rot_i_pred = lie_tools.so3_to_hopf(rot_i)
+                            rot_i_pred = lie_tools.so3_to_hopf(rot_resi_i[self.num_bodies:, ...])
                             body_rots_pred.append(rot_i_pred)
-                            body_trans_pred.append(R_global_trans_i.squeeze()[...,:2] + trans[i:i+1, ...])
+                            body_trans_pred.append(global_trans_i)
+                            #body_trans_pred.append(R_global_trans_i.squeeze()[...,:2] + trans[i:i+1, ...])
 
                         #print(euler2.shape, neighbor_eulers.shape, rot.shape)
                         ref_i = ref_fft[i:i+1,...].repeat(euler2.shape[0], 1, 1, 1)
@@ -1731,6 +1620,11 @@ class VanillaDecoder(nn.Module):
             images_corrected = fft.torch_ifft2_center(images_fft)
             images_corrected = utils.crop_image(images_corrected, self.crop_vol_size)
             images = utils.crop_image(images, self.crop_vol_size)
+
+            losses["y_recon2"] = (images_corrected**2).sum(dim=(-1,-2,)).view(B, -1)
+            losses["ycorr"] = (-2.*images_corrected*(refs*masks)).sum(dim=(-1,-2,)).view(B, -1)
+            losses["y2"] = ((refs*masks)**2).sum(dim=(-1,-2,)).view(B, -1)
+
 
         if save_mrc:
             if self.use_fourier:

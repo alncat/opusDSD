@@ -9,6 +9,7 @@ import sys, os
 import pickle
 import shutil
 import healpy as hp
+import inspect
 from datetime import datetime as dt
 import scipy
 
@@ -261,18 +262,26 @@ def main(args):
         plt.legend(loc="upper right")
         plt.savefig(f"{workdir}/train_losses.png")
 
-        z = torch.load(zfile)["mu"].cpu().numpy()
+        load_kwargs = {}
+        if "weights_only" in inspect.signature(torch.load).parameters:
+            # PyTorch is new enough to support this arg (e.g. >= 2.x)
+            load_kwargs["weights_only"] = False  # or True, if you want safe weights-only loading
+        load_z = torch.load(zfile, **load_kwargs)
+        z = load_z["mu"].cpu().numpy()
         log("loading {}, z shape {}".format(zfile, z.shape))
         Nimg = z.shape[0]
         zdim = z.shape[1]
-        posetracker = PoseTracker.load(poses, Nimg, args.D, None, None,
-                                   deform=True, deform_emb_size=zdim, latents=zfile, batch_size=4)# hp_order=2)
-        groups = posetracker.euler_groups
-        utils.save_pkl(groups, f"{workdir}/groups.pkl")
-        log("loading {}".format(poses))
+        if os.path.isfile(args.pose):
+            posetracker = PoseTracker.load(poses, Nimg, args.D, None, None,
+                                       deform=True, deform_emb_size=zdim, latents=zfile, batch_size=4)# hp_order=2)
+            groups = posetracker.euler_groups
+            utils.save_pkl(groups, f"{workdir}/groups.pkl")
+            log("loading {}".format(poses))
+        else:
+            groups = None
         # loading z codes for deformation too
-        if posetracker.multi_mu is not None:
-            multi_z = posetracker.multi_mu
+        if "multi_mu" in load_z:
+            multi_z = load_z["multi_mu"].cpu().numpy()
         else:
             multi_z = None
     else:
