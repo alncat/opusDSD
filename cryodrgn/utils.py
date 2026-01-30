@@ -6,6 +6,7 @@ import collections
 import functools
 from torch import nn
 import torch
+import inspect
 from . import fft
 import torch.nn.functional as F
 from scipy import signal, ndimage
@@ -526,6 +527,15 @@ def load_pkl(pkl):
     with open(pkl,'rb') as f:
         x = pickle.load(f)
     return x
+
+def load_torch_pkl(zfile):
+    load_kwargs = {}
+    if "weights_only" in inspect.signature(torch.load).parameters:
+    # PyTorch is new enough to support this arg (e.g. >= 2.x)
+        load_kwargs["weights_only"] = False  # or True, if you want safe weights-only loading
+    load_z = torch.load(zfile, **load_kwargs)
+    return load_z
+
 
 def save_pkl(data, out_pkl, mode='wb'):
     if mode == 'wb' and os.path.exists(out_pkl):

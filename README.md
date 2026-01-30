@@ -14,6 +14,7 @@ We have developed a structural heterogeneity resolving method for cryo-ET, **OPU
    1. [sample latent spaces](#sample)
    2. [reconstruct volumes](#reconstruct)
    3. [select particles](#select)
+   4. [interactive filtering](#filtering)
 
 # Opus-DSD2 <div id="opusdsd">
 This repository contains the implementation of opus-deep structural disentanglement2 (DSD2), which is developed by the research group of
@@ -433,3 +434,22 @@ dsdsh parse_pose /work/consensus_data.star 320 1.699 /work/sp 16 16 --relion31
 - $7 indicates the version of starfile, only include this when the version of starfile is higher than 3.0
 
 change to directory ```/work/sp/analyze.16/kmeans16``` to checkout the starfile for images in each cluster.
+
+## interactive filtering <div id="filtering">
+OPUS-DSD2 provides an interactive Jupyter notebook for filtering particles based on latent space analysis. The notebook `cryoDRGN_filtering_template.ipynb` is available in the `cryodrgn/templates/` directory. This notebook allows you to:
+
+* Visualize the latent space with UMAP and PCA
+* Select particles using k-means or GMM clustering
+* Filter outlier particles based on Z-score of latent magnitudes
+* Interactively select particles using a lasso tool
+* View selected particle images
+* Save selected indices for downstream processing
+
+To use the notebook:
+1. Copy the template notebook to your working directory
+2. Update the `WORKDIR` and `EPOCH` variables to point to your training results
+3. Run the notebook cells sequentially
+4. Use the interactive widgets to select particles
+5. Save the selected indices as `index.pkl` for use with cryoDRGN commands
+
+The notebook provides a user-friendly interface for exploring the latent space and selecting subsets of particles for further analysis or re-training.

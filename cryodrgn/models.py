@@ -1536,7 +1536,7 @@ class VanillaDecoder(nn.Module):
                         #vol = self.transformer.rotate_euler(template_i, euler_i)
                         # Mask template using moving mask, generate projections
                         #print(vol.shape, valid.shape)
-                        vol = vol*((valid > 0).float() + 1e-3)
+                        vol = vol*((valid > 0).float() + 1e-2)
                         image = torch.mean(vol, axis=-3).squeeze(1)*np.sqrt(vol.shape[-3]//2)
                     else:
                         raise RuntimeError("Not implemented")

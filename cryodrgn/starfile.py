@@ -169,6 +169,21 @@ class Starfile():
             f.write('\n')
         #f.write('\n'.join([' '.join(self.df.loc[i]) for i in range(len(self.df))]))
 
+    def write_ind(self, outstar, ind):
+        f = open(outstar, 'w')
+        f.write('# Created {}\n'.format(dt.now()))
+        f.write('\n')
+        f.write('data_\n\n')
+        f.write('loop_\n')
+        col_count = 1
+        for col in self.headers:
+            f.write(f'{col} #{col_count}\n')
+            col_count += 1
+        count = 0
+        for i in ind:
+            f.write(' '.join([str(v) for v in self.df.loc[i]]))
+            f.write('\n')
+
     def write_subset(self, outstar, label):
         f = open(outstar,'w')
         f.write('# Created {}\n'.format(dt.now()))
