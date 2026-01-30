@@ -441,15 +441,20 @@ OPUS-DSD2 provides an interactive Jupyter notebook for filtering particles based
 * Visualize the latent space with UMAP and PCA
 * Select particles using k-means or GMM clustering
 * Filter outlier particles based on Z-score of latent magnitudes
-* Interactively select particles using a lasso tool
 * View selected particle images
 * Save selected indices for downstream processing
 
 To use the notebook:
-1. Copy the template notebook to your working directory
-2. Update the `WORKDIR` and `EPOCH` variables to point to your training results
-3. Run the notebook cells sequentially
-4. Use the interactive widgets to select particles
-5. Save the selected indices as `index.pkl` for use with cryoDRGN commands
 
-The notebook provides a user-friendly interface for exploring the latent space and selecting subsets of particles for further analysis or re-training.
+1. Run an analysis, then the template notebook will be copied to your analysis directory:
+   ```
+   dsdsh analyze . 19 10 20
+   ```
+   
+2. Open the notebook with Jupyter and adjust the `WORKDIR` and `EPOCH` variables to point to your training output.
+
+3. Run the cells sequentially to load the latent encodings, visualize the latent space (PCA, UMAP, pose distributions), and apply filtering methods.
+
+4. The notebook tracks selected particles in the variable `ind_selected`. You can save the selection as a `.star` file for downstream use.
+
+**Note:** The notebook requires jupyter-notebook, plotly and ipywidgets for interactive visualizations. Install them via pip install notebook plotly ipywidgets if not already present in your environment.
