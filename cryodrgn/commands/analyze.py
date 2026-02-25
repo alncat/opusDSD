@@ -34,6 +34,8 @@ def add_args(parser):
     parser.add_argument('-o','--outdir', help='Output directory for analysis results (default: [workdir]/analyze.[epoch])')
     parser.add_argument('--skip-vol', default=True, action='store_true', help='Skip generation of volumes (default: %(default)s)')
     parser.add_argument('--skip-umap', action='store_true', help='Skip running UMAP on latents (default: %(default)s)')
+    parser.add_argument('--umap-cores', type=int, default=-1,
+                        help='Number of CPU cores for UMAP via n_jobs. Use -1 for all cores (default: %(default)s)')
     parser.add_argument('--vanilla', default=True, action='store_true', help='analyzing result for dsd')
     parser.add_argument('--D', type=int, default=192, help='the size of image (defaul: %(default)s)')
     parser.add_argument('--pose', help='directory for analysis results (default: [workdir]/analyze.[epoch])')
@@ -67,7 +69,7 @@ def analyze_z1(z, outdir, vg):
     ztraj = np.linspace(*np.percentile(z,(5,95)), 10) # or np.percentile(z, np.linspace(5,95,10)) ?
     vg.gen_volumes(outdir, ztraj)
 
-def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=20, num_pc_samples=10):
+def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=20, num_pc_samples=10, umap_cores=-1):
     zdim = z.shape[1]
 
     # Principal component analysis
@@ -108,7 +110,12 @@ def analyze_zN(z, outdir, vg, groups, skip_umap=False, num_pcs=2, num_ksamples=2
             umap_emb = utils.load_pkl(umap_file)
             skip_umap = False
         else:
-            umap_emb = analysis.run_umap(z)
+            log(f'UMAP n_jobs={umap_cores}')
+            try:
+                umap_emb = analysis.run_umap(z, n_jobs=umap_cores)
+            except TypeError:
+                log('Installed umap-learn does not support n_jobs; running with default settings')
+                umap_emb = analysis.run_umap(z)
             utils.save_pkl(umap_emb, umap_file)
             skip_umap = False
 
@@ -229,6 +236,8 @@ class VolumeGenerator:
 def main(args):
     t1 = dt.now()
     E = args.epoch
+    if args.umap_cores == 0 or args.umap_cores < -1:
+        raise ValueError('--umap-cores must be -1 or a positive integer')
     log(f"analyzing {E}")
     workdir = args.workdir
     zfile = f'{workdir}/z.{E}.pkl'
@@ -295,12 +304,12 @@ def main(args):
         analyze_z1(z, outdir, vg)
     else:
         analyze_zN(z, outdir, vg, groups, skip_umap=args.skip_umap, num_pcs=args.pc,
-                   num_ksamples=args.ksample, num_pc_samples=args.psample)
+                   num_ksamples=args.ksample, num_pc_samples=args.psample, umap_cores=args.umap_cores)
         if multi_z is not None:
             if not os.path.exists(outdir_multi):
                 os.mkdir(outdir_multi)
             analyze_zN(multi_z, outdir_multi, vg, groups, skip_umap=args.skip_umap, num_pcs=min(args.pc, multi_z.shape[1]),
-                       num_ksamples=args.ksample, num_pc_samples=args.psample)
+                       num_ksamples=args.ksample, num_pc_samples=args.psample, umap_cores=args.umap_cores)
 
     # copy over template if file doesn't exist
     out_ipynb = f'{outdir}/cryoDRGN_viz.ipynb'

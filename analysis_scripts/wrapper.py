@@ -37,15 +37,20 @@ class analyze:
         parser.add_argument('N', type=int, help='epoch number to be analyzed')
         parser.add_argument('numpc', type=int, help='number of PCs')
         parser.add_argument('numk', type=int, help='number of KMeans clusters')
+        parser.add_argument('--psample', type=int, default=10, required=False,
+                            help='number of samples generated per PC traversal (default: %(default)s)')
         parser.add_argument('--skip-umap', action='store_true', required=False, help='instead of learn a umap embedding, loading one from umap.pkl (default: %(default)s)')
+        parser.add_argument('--umap-cores', type=int, default=-1, required=False,
+                            help='Number of CPU cores for UMAP n_jobs; use -1 for all cores (default: %(default)s)')
 
     @classmethod
     def main(cls, args):
         script_path = os.path.join(os.path.dirname(__file__), 'analyze.sh')
+        cmd = ['bash', script_path, args.resdir, str(args.N), str(args.numpc), str(args.numk), str(args.psample)]
         if args.skip_umap:
-            subprocess.call(['bash', script_path, args.resdir, str(args.N), str(args.numpc), str(args.numk), '--skip-umap'])
-        else:
-            subprocess.call(['bash', script_path, args.resdir, str(args.N), str(args.numpc), str(args.numk),])
+            cmd.append('--skip-umap')
+        cmd.extend(['--umap-cores', str(args.umap_cores)])
+        subprocess.call(cmd)
 
 class parse_pose:
     @classmethod
@@ -108,5 +113,3 @@ class prepare_multi:
                 subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.masks, str(args.numb), '--volumes ' + args.volumes, '--outmasks ' + args.outmasks,])
             else:
                 subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.masks, str(args.numb), '--outmasks ' + args.outmasks,])
-
-

@@ -368,10 +368,21 @@ dsdsh analyze /work/sp 16 4 16
 - $3 is the number of PCs you would like to sample for traversal
 - $4 is the number of clusters for kmeans clustering.
 
+Useful optional arguments:
+
+- `--psample`: number of samples generated per PC traversal (default `10`)
+- `--umap-cores`: number of CPU cores for UMAP (`-1` uses all cores)
+- `--skip-umap`: reuse existing `analyze.N/umap.pkl` instead of recomputing
+
+Example with options:
+```
+dsdsh analyze /work/sp 16 4 16 --psample 20 --umap-cores 8
+```
+
 The analysis result will be stored in /work/sp/analyze.16, i.e., the output directory plus the epoch number you analyzed, using the above command. You can find the UMAP with the labeled kmeans centers in /work/sp/analyze.16/kmeans16/umap.png and the umap with particles colored by their projection parameter in /work/sp/analyze.16/umap.png .
 
 ## reconstruct volumes <div id="reconstruct">
-After executing the above command once, you may skip the lengthy umap embedding laterly by appending ```--skip-umap``` to the command in analyze.sh. Our analysis script will read the pickled umap embeddings directly.
+After executing the above command once, you may skip the lengthy UMAP embedding later by appending `--skip-umap` to `dsdsh analyze`. The analysis script will read the pickled UMAP embeddings directly.
 The eval_vol command has following options,
 
 If the model is trained by fitting multi-body dynamics, we have a mode, eval_vol, to reconstruct the 
