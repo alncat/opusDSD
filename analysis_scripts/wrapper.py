@@ -1,6 +1,7 @@
 # mypackage/myscript_wrapper.py
 import subprocess
 import os
+import sys
 
 class eval_vol:
     @classmethod
@@ -70,6 +71,56 @@ class parse_pose:
             subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.resdir, str(args.N), str(args.kmeans), '--relion31'])
         else:
             subprocess.call(['bash', script_path, args.starfile, str(args.D), str(args.apix), args.resdir, str(args.N), str(args.kmeans),])
+
+class create_mask:
+    @classmethod
+    def add_args(cls, parser):
+        parser.add_argument('input', type=os.path.abspath, help='input volume (.mrc/.map)')
+        parser.add_argument('-o', '--output', type=os.path.abspath, required=True, help='output mask MRC')
+        parser.add_argument('--threshold', type=float, required=False, help='absolute threshold for mask')
+        parser.add_argument('--percentile', type=float, default=99.0, required=False,
+                            help='percentile threshold if --threshold not set (default: %(default)s)')
+        parser.add_argument('--use-abs', action='store_true', required=False,
+                            help='threshold on absolute density')
+        parser.add_argument('--largest-component', action='store_true', required=False,
+                            help='keep only largest connected component')
+        parser.add_argument('--fill-holes', action='store_true', required=False, help='fill holes')
+        parser.add_argument('--open', type=int, default=0, required=False, help='opening iterations')
+        parser.add_argument('--close', type=int, default=0, required=False, help='closing iterations')
+        parser.add_argument('--dilate', type=int, default=0, required=False, help='dilation iterations')
+        parser.add_argument('--erode', type=int, default=0, required=False, help='erosion iterations')
+        parser.add_argument('--soft-edge', type=float, default=0.0, required=False,
+                            help='soft edge width in voxels')
+        parser.add_argument('--sphere-radius', type=float, default=None, required=False,
+                            help='create spherical mask with this radius (voxels)')
+        parser.add_argument('--sphere-center', type=float, nargs=3, required=False,
+                            metavar=('CZ', 'CY', 'CX'),
+                            help='sphere center in voxel coordinates (z y x)')
+
+    @classmethod
+    def main(cls, args):
+        script_path = os.path.join(os.path.dirname(__file__), 'create_mask.py')
+        cmd = [sys.executable, script_path, args.input, '-o', args.output,
+               '--percentile', str(args.percentile),
+               '--open', str(args.open), '--close', str(args.close),
+               '--dilate', str(args.dilate), '--erode', str(args.erode),
+               '--soft-edge', str(args.soft_edge)]
+        if args.threshold is not None:
+            cmd.extend(['--threshold', str(args.threshold)])
+        if args.use_abs:
+            cmd.append('--use-abs')
+        if args.largest_component:
+            cmd.append('--largest-component')
+        if args.fill_holes:
+            cmd.append('--fill-holes')
+        if args.sphere_radius is not None:
+            cmd.extend(['--sphere-radius', str(args.sphere_radius)])
+        if args.sphere_center is not None:
+            cmd.extend(['--sphere-center',
+                        str(args.sphere_center[0]),
+                        str(args.sphere_center[1]),
+                        str(args.sphere_center[2])])
+        subprocess.call(cmd)
 
 class prepare:
     @classmethod

@@ -26,6 +26,12 @@ def main():
     parser_command2.set_defaults(func=wrapper.parse_pose.main)
 
     # Subparser for command2
+    parser_command2 = subparsers.add_parser('create_mask')
+    # Add arguments for command2 if needed
+    wrapper.create_mask.add_args(parser_command2)
+    parser_command2.set_defaults(func=wrapper.create_mask.main)
+
+    # Subparser for command2
     parser_command2 = subparsers.add_parser('prepare')
     # Add arguments for command2 if needed
     wrapper.prepare.add_args(parser_command2)
@@ -45,4 +51,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
