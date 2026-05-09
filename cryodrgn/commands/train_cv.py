@@ -110,7 +110,7 @@ def add_args(parser):
     group.add_argument('--dec-layers', dest='players', type=int, default=3, help='Number of hidden layers (default: %(default)s)')
     group.add_argument('--dec-dim', dest='pdim', type=int, default=256, help='Number of nodes in hidden layers (default: %(default)s)')
     group.add_argument('--pe-type', choices=('geom_ft','geom_full','geom_lowf','geom_nohighf','linear_lowf','none', 'convwarp', 'vanilla'), default='vanilla', help='Type of positional encoding (default: %(default)s)')
-    group.add_argument('--template-type', choices=('conv'), default='conv', help='Type of template decoding method (default: %(default)s)')
+    group.add_argument('--template-type', choices=('conv',), default='conv', help='Type of template decoding method (default: %(default)s)')
     group.add_argument('--warp-type', choices=('blurmix', 'diffeo', 'deform'), help='Type of warp decoding method (default: %(default)s)')
     group.add_argument('--symm', help='Type of symmetry of the 3D volume (default: %(default)s)')
     group.add_argument('--num-struct', type=int, default=1, help='Num of structures (default: %(default)s)')
