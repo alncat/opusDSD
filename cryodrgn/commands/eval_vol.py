@@ -105,10 +105,12 @@ def main(args):
     lattice = Lattice(D, extent=0.5)
     downfrac = cfg['dataset_args']['downfrac']
     crop_vol_size = cfg['model_args']['down_vol_size']
-    Apix = cfg['model_args']['Apix']
+    Apix = float(cfg['model_args']['Apix']) # older configs store it as a tensor
     templateres = cfg['model_args']['templateres']
     #args.Apix = down_vol_size/((D - 1)*downfrac*0.85)*Apix
-    window_r = crop_vol_size/((D-1)*downfrac)
+    # render_size is the image size used during training, reproduce the rounding done in HetOnlyVAE
+    render_size = (int((D-1)*downfrac)//2)*2
+    window_r = crop_vol_size/render_size
     downfrac *= Apix/args.Apix
 
     # load masks
@@ -121,7 +123,6 @@ def main(args):
     log("the output volume by convnet will further downsample by downfrac: {} to achieve desired apix".format(downfrac))
     assert templateres is not None
     log("templateres: output volume of convnet is of size {}".format(templateres))
-    log("the final output volume rendered by spatial transformer is of size {}".format(int((D-1)*downfrac*window_r)))
 
     if args.downsample:
         assert args.downsample % 2 == 0, "Boxsize must be even"
@@ -138,6 +139,13 @@ def main(args):
                 deform_emb_size=args.deform_size, downfrac=downfrac,
                 templateres=templateres, window_r=window_r, masks_params=masks_params,
                 num_bodies=args.num_bodies, z_affine_dim=z_affine_dim)
+
+    # the output box is rounded down to an even number by the model, hence the realized pixel size
+    # can differ slightly from the requested one. the physical size of the volume is invariant,
+    # it always equals crop_vol_size*Apix (the extent cropped out during training)
+    out_apix = crop_vol_size*Apix/model.down_vol_size
+    log("the final output volume rendered by spatial transformer is of size {}, its apix is {} (requested {})".format(
+        model.down_vol_size, out_apix, args.Apix))
 
     vanilla = args.pe_type == "vanilla"
 
@@ -224,7 +232,7 @@ def main(args):
                 #null_z = torch.zeros(zdim).to(device)
                 zz = torch.cat([template_z, zz], dim=-1)
             if vanilla:
-                model.save_mrc(f'{args.o}/{args.prefix}'+str(i), enc=zz, Apix=args.Apix, flip=args.flip)
+                model.save_mrc(f'{args.o}/{args.prefix}'+str(i), enc=zz, Apix=out_apix, flip=args.flip)
             else:
                 if args.downsample:
                     extent = lattice.extent * (args.downsample/(D-1))
@@ -243,7 +251,7 @@ def main(args):
         z = torch.randn(1, args.zdim).to(device)
         log(z)
         if vanilla:
-            model.save_mrc(args.prefix, enc=z)
+            model.save_mrc(args.prefix, enc=z, Apix=out_apix, flip=args.flip)
             return
         if args.downsample:
             extent = lattice.extent * (args.downsample/(D-1))

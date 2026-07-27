@@ -1,5 +1,6 @@
 from datetime import datetime as dt
 import os, sys
+import io
 import numpy as np
 import pickle
 import collections
@@ -523,9 +524,25 @@ class SpatialTransformer2D(nn.Module):
         return self.sample(src, pos)
 
 
+class _CpuUnpickler(pickle.Unpickler):
+    '''Unpickler which maps any pickled torch tensor onto the cpu'''
+    def find_class(self, module, name):
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            load_kwargs = {}
+            if "weights_only" in inspect.signature(torch.load).parameters:
+                load_kwargs["weights_only"] = False
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu', **load_kwargs)
+        return super().find_class(module, name)
+
 def load_pkl(pkl):
     with open(pkl,'rb') as f:
-        x = pickle.load(f)
+        try:
+            x = pickle.load(f)
+        except RuntimeError:
+            # configs written by earlier versions store Apix as a tensor living on the gpu it was
+            # trained on, which cannot be deserialized on a machine without that device
+            f.seek(0)
+            x = _CpuUnpickler(f).load()
     return x
 
 def load_torch_pkl(zfile):

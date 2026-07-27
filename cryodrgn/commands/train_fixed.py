@@ -617,7 +617,7 @@ def save_config(args, dataset, lattice, model, out_config):
                       activation=args.activation,
                       template_type=args.template_type,
                       down_vol_size=model.down_vol_size,
-                      Apix=model.decoder.Apix,
+                      Apix=float(model.decoder.Apix),
                       templateres=model.templateres)
     config = dict(dataset_args=dataset_args,
                   lattice_args=lattice_args,
