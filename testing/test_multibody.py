@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 import torch
 
-from cryodrgn.commands.parse_multi_pose_star import center_of_mass
+from cryodrgn.commands.parse_multi_pose_star import center_of_mass, pick_origin_body
 
 N = 32  # box size, keeps the 3d grids small
 
@@ -73,6 +73,32 @@ def test_axes_stay_right_handed_under_rotation(seed):
     _, _, axes = com(ellipsoid((11., 7., 5.), rotation=rotation))
     assert torch.det(axes) == pytest.approx(1.0, abs=1e-4)
     assert (axes @ axes.T - torch.eye(3)).abs().max() < 1e-4
+
+
+def test_origin_body_is_the_most_referenced_one():
+    '''_rlnBodyRotateRelativeTo of four bodies which all hang off the second one'''
+    assert pick_origin_body([1, 1, 1, 1]) == 1
+
+
+def test_origin_body_can_be_given(capsys):
+    assert pick_origin_body([1, 1, 1, 1], requested=3) == 2  # the starfile counts from one
+    assert 'body 3 is the origin' in capsys.readouterr().out
+
+
+def test_a_tie_between_bodies_is_reported(capsys):
+    '''Two bodies referenced twice each, argmax settles on the first without saying so'''
+    origin = pick_origin_body([1, 1, 3, 3])
+    assert origin == 1
+    warning = capsys.readouterr().out
+    assert 'WARNING' in warning
+    assert '[2, 4]' in warning
+    assert '--origin-body' in warning
+
+
+def test_origin_body_out_of_range_is_refused():
+    for requested in (0, 5):
+        with pytest.raises(AssertionError, match='origin-body'):
+            pick_origin_body([1, 1, 1, 1], requested=requested)
 
 
 def test_axes_recover_the_orientation_of_the_body():

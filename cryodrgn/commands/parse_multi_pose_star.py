@@ -54,6 +54,33 @@ def center_of_mass(volume):
 
     return center, r_p, eigvecs
 
+def pick_origin_body(in_relatives, requested=None):
+    '''Which body the others are placed relative to
+
+    Relion only records a parent for every body, in _rlnBodyRotateRelativeTo, there is no field
+    which says that a body is the root of that tree. Taking the most referenced body is a guess,
+    and one which quietly settles on the lowest index when several bodies are referenced equally
+    often, so let it be stated instead. Body numbering follows the mask starfile, counting from 1.
+    '''
+    n_bodies = len(in_relatives)
+    if requested is not None:
+        assert 1 <= requested <= n_bodies, \
+            "--origin-body is {} but the mask starfile has {} bodies".format(requested, n_bodies)
+        log("body {} is the origin, taken from --origin-body".format(requested))
+        return requested - 1
+
+    counts = np.bincount(in_relatives, minlength=n_bodies)
+    origin = int(counts.argmax())
+    tied = np.flatnonzero(counts == counts[origin]) + 1
+    if len(tied) > 1:
+        log("WARNING: bodies {} are each referenced by {} others, guessing that body {} is the "
+            "origin, pass --origin-body to say which one it is".format(
+                tied.tolist(), counts[origin], origin + 1))
+    else:
+        log("body {} is referenced by {} others, taking it as the origin".format(
+            origin + 1, counts[origin]))
+    return origin
+
 def add_args(parser):
     parser.add_argument('input', help='RELION .star file')
     parser.add_argument('-D', type=int, required=True, help='Box size of reconstruction (pixels)')
@@ -64,6 +91,7 @@ def add_args(parser):
     parser.add_argument('--masks', metavar='PKL', type=os.path.abspath, required=False, help='mask starfile for multi-body refinement')
     parser.add_argument('--volumes', metavar='PKL', type=os.path.abspath, required=False, help='Output label.pkl')
     parser.add_argument('--bodies', type=int, required=True, help='Number of bodies in mask starfile')
+    parser.add_argument('--origin-body', type=int, help='Which body the others move relative to, numbered from 1 as in the mask starfile (default: the most referenced one)')
     parser.add_argument('--outmasks', default="mask_params", help="the name of pkl file storing masks related parameters")
     return parser
 
@@ -183,6 +211,7 @@ def main(args):
         axes.append(eigvecs)
 
     print("radii_bodies from masks: ", radii)
+    origin_rel = pick_origin_body(in_relatives, args.origin_body)
     masks = torch.stack(masks, dim=0)
     masks = (masks > 1e-3)*masks
     vol_coms = None
@@ -248,7 +277,6 @@ def main(args):
 
         orientations = []
         rot_radii = []
-        origin_rel = np.bincount(in_relatives).argmax()
         for m_i in range(masks.shape[0]):
             r0 = com_bodies[in_relatives[m_i]] - c0s[m_i]
             r1 = com_bodies[in_relatives[m_i]] - c1s[m_i]
@@ -284,7 +312,6 @@ def main(args):
     print("in_relatives: ", in_relatives)
     print("coms computed from masks: ", com_bodies,)
     print("coms computed from volumes: ", vol_coms)
-    origin_rel = np.bincount(in_relatives).argmax()
     for b_i in range(len(s_mask.df)):
         rotate_directions.append(com_bodies[in_relatives[b_i]] - com_bodies[b_i])
         rotate_directions_ori.append(com_bodies[b_i] - com_bodies[in_relatives[b_i]])
