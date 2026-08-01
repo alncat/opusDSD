@@ -32,7 +32,8 @@ def add_args(parser):
     parser.add_argument('epoch', type=int, help='Epoch number N to analyze (0-based indexing, corresponding to z.N.pkl, weights.N.pkl)')
     parser.add_argument('--device', type=int, help='Optionally specify CUDA device')
     parser.add_argument('-o','--outdir', help='Output directory for analysis results (default: [workdir]/analyze.[epoch])')
-    parser.add_argument('--skip-vol', default=True, action='store_true', help='Skip generation of volumes (default: %(default)s)')
+    parser.add_argument('--skip-vol', dest='skip_vol', default=True, action='store_true', help='Skip generation of volumes (default: %(default)s)')
+    parser.add_argument('--gen-vol', dest='skip_vol', action='store_false', help='Generate a volume for every sampled latent, volumes are skipped by default')
     parser.add_argument('--skip-umap', action='store_true', help='Skip running UMAP on latents (default: %(default)s)')
     parser.add_argument('--umap-cores', type=int, default=-1,
                         help='Number of CPU cores for UMAP via n_jobs. Use -1 for all cores (default: %(default)s)')
@@ -41,7 +42,8 @@ def add_args(parser):
     parser.add_argument('--pose', help='directory for analysis results (default: [workdir]/analyze.[epoch])')
 
     group = parser.add_argument_group('Extra arguments for volume generation')
-    group.add_argument('--Apix', type=float, default=1, help='Pixel size to add to .mrc header (default: %(default)s A/pix)')
+    group.add_argument('--Apix', type=float, default=1, help='Desired pixel size of the generated volumes (default: %(default)s A/pix)')
+    group.add_argument('--num-bodies', type=int, default=0, help='Number of rigid bodies the model was trained with (default: %(default)s)')
     group.add_argument('--flip', action='store_true', help='Flip handedness of output volume')
     group.add_argument('-d','--downsample', type=int, help='Downsample volumes to this box size (pixels)')
     group.add_argument('--pc', type=int, default=2, help='Number of principal component traversals to generate (default: %(default)s)')
@@ -297,7 +299,8 @@ def main(args):
         z = utils.load_pkl(zfile)
     zdim = z.shape[1]
 
-    vol_args = dict(Apix=args.Apix, downsample=args.downsample, flip=args.flip, cuda=args.device)
+    vol_args = dict(Apix=args.Apix, downsample=args.downsample, flip=args.flip, cuda=args.device,
+                    num_bodies=args.num_bodies)
     vg = VolumeGenerator(weights, config, vol_args, skip_vol=args.skip_vol)
 
     if zdim == 1:

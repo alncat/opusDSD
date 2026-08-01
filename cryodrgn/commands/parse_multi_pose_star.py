@@ -1,12 +1,13 @@
 '''Parse image poses from RELION .star file'''
 
 import argparse
+import glob
 import numpy as np
+import re
 import sys, os
 import pickle
 
 from cryodrgn import utils
-from cryodrgn import lie_tools
 from cryodrgn import starfile
 from cryodrgn import dataset
 import torch.nn.functional as F
@@ -37,23 +38,19 @@ def center_of_mass(volume):
     radius_sum = torch.eye(3) * (radius.sum(dim=-1, keepdim=True).unsqueeze(-1))
     #print((matrix*(vol.unsqueeze(-1))).sum(dim=(0,1,2)), radius_sum.sum(dim=(0,1,2)))
     matrix = ((matrix*vol.unsqueeze(-1)+radius_sum)).sum(dim=(0, 1, 2))
-    eigvals, eigvecs = np.linalg.eig(matrix.numpy())
-    indices = np.argsort(eigvals)
-    #print(matrix, eigvals[indices])
-    eigvecs = torch.from_numpy(eigvecs[:, indices].T) # eigvecs[0] is the first eigen vector with smallest eigenvalues
-    eigvals = eigvals[indices]
-    #print("matrix @ eigvecs", matrix, eigvecs @ matrix @ eigvecs.T)
-    new_coords = (centered)@eigvecs.T
-    new_coords = -new_coords.unsqueeze(-1) * (centered @ eigvecs.T).unsqueeze(-2)
-    new_coords = new_coords * vol.unsqueeze(-1)
-    radius_sum = -torch.diagonal(new_coords, dim1=-2, dim2=-1).sum()
-    #radius_sum = -(new_coords[..., 0, 0] + new_coords[..., 1, 1] + new_coords[..., 2, 2]).sum()
-    matrix_new = new_coords.sum(dim=(0,1,2)) + torch.eye(3)*radius_sum
-    matrix_new /= mass
-    #print(matrix, torch.sqrt(matrix_new))
-    assert np.all(eigvals >  0)
-    print("r, r_p: ", r, torch.sqrt(eigvals/mass))
+    # the inertia tensor is symmetric by construction, so use eigh: it returns real eigenvalues in
+    # ascending order and orthonormal eigenvectors. eig guarantees neither, and for a body whose
+    # two smallest moments are close, which is the case for anything globular, it returns axes
+    # which are visibly not orthogonal
+    eigvals, eigvecs = np.linalg.eigh(matrix.numpy())
+    assert np.all(eigvals > 0)
+    eigvals = torch.from_numpy(eigvals)
+    eigvecs = torch.from_numpy(eigvecs.T) # eigvecs[0] is the first eigen vector with smallest eigenvalues
+    if torch.det(eigvecs) < 0:
+        # the axes are used as a rotation downstream, a reflection would mirror the body
+        eigvecs[0] = -eigvecs[0]
     r_p = torch.sqrt(eigvals/mass)
+    print("r, r_p: ", r, r_p)
 
     return center, r_p, eigvecs
 
@@ -163,16 +160,19 @@ def main(args):
 
     log(f'Loading reference volume from {args.masks}')
     s_mask = starfile.Starfile.load(args.masks)
-    prefix = os.path.dirname(args.masks)
+    # dirname is empty when the starfile is given by its bare name, which would turn every path
+    # built from it into an absolute one
+    prefix = os.path.dirname(args.masks) or '.'
     print(s_mask.headers, prefix)
-    #assert len(s_mask.df) == len(s.multibodies)
+    assert len(s_mask.df) == args.bodies, \
+        "the mask starfile describes {} bodies but --bodies is {}".format(len(s_mask.df), args.bodies)
     in_relatives = []
     com_bodies = []
     radii = []
     masks = []
     axes = []
     for b_i in range(len(s_mask.df)):
-        mask_name = prefix + "/" + s_mask.df['_rlnBodyMaskName'][b_i]
+        mask_name = os.path.join(prefix, s_mask.df['_rlnBodyMaskName'][b_i])
         in_relatives.append(int(s_mask.df['_rlnBodyRotateRelativeTo'][b_i]) - 1)
         print(mask_name)
         ref_vol = dataset.VolData(mask_name)
@@ -188,32 +188,41 @@ def main(args):
     vol_coms = None
     rot_radii = None
     if args.volumes:
-        #read in dynamics volumes
+        #read in dynamics volumes, they are a traversal so the first and the last one are the
+        #two extremes of the motion and the middle one is the resting state
+        vol_names = sorted(glob.glob(os.path.join(args.volumes, "reference*.mrc")),
+                           key=lambda name: int(re.findall(r'reference(\d+)', os.path.basename(name))[0]))
+        assert len(vol_names) >= 3, \
+            "found {} volumes in {}, need at least three to see how the bodies move".format(
+                len(vol_names), args.volumes)
+        log(f"found {len(vol_names)} volumes in {args.volumes}")
         vols = []
-        for b_i in range(10):
-            mask_name = args.volumes + "/reference" + str(b_i) + ".mrc"
-            print(mask_name)
-            ref_vol = dataset.VolData(mask_name)
+        for b_i, vol_name in enumerate(vol_names):
+            print(vol_name)
+            ref_vol = dataset.VolData(vol_name)
             vols.append(ref_vol.get())
             if b_i == 0:
                 #interpolate mask
-                #scale = masks.shape[-1]/vols[-1].shape[-1]
-                #assert args.D == masks.shape[-1]
-                #scale = args.D/vols[-1].shape[-1]
-                #scale_apix = ref_vol.Apix/args.Apix
-                # TODO: the volumes are cropped, but masks of full size are not cropped
+                # the volumes only cover the part of the box which was cropped out during
+                # training, so the masks have to be cropped to the same extent before they can
+                # be resampled onto the volume grid
                 print(f"need to resample masks from {args.Apix} to {ref_vol.Apix}")
                 print(f"mask length {args.D*args.Apix}, volume length {vols[-1].shape[-1]*ref_vol.Apix}")
                 crop_size = int((args.D*args.Apix - vols[-1].shape[-1]*ref_vol.Apix)/args.Apix)//2
+                assert crop_size >= 0, \
+                    "the volumes cover {:.1f} A but the masks only {:.1f} A, they cannot be " \
+                    "cropped to match".format(vols[-1].shape[-1]*ref_vol.Apix, args.D*args.Apix)
                 if masks.shape[-1] == args.D:
                     print(f"need to crop masks by {crop_size}")
                     masks = masks[:, crop_size:args.D-crop_size, crop_size:args.D-crop_size, crop_size:args.D-crop_size]
                     assert masks.shape[-1] == args.D - crop_size*2
                 print(f"mask shape after cropping {masks.shape}")
-                #scale = masks.shape[-1]/vols[-1].shape[-1]
-                scale = (args.D - crop_size*2)/vols[-1].shape[-1]
+                # how many mask pixels one volume voxel is worth, read off whatever the masks
+                # ended up being rather than assuming they were cropped
+                scale = masks.shape[-1]/vols[-1].shape[-1]
                 print(f"rescale the coordinates by {scale}")
-                masks = F.interpolate(masks.unsqueeze(0), vols[-1].shape, mode='trilinear').squeeze()
+                masks = F.interpolate(masks.unsqueeze(0), vols[-1].shape, mode='trilinear',
+                                      align_corners=utils.ALIGN_CORNERS).squeeze()
                 print(masks.sum(dim=(1,2,3)))
 
         c0s = []
@@ -232,12 +241,11 @@ def main(args):
             c0s.append(c0)
             c1s.append(c1)
             #print(c0, c1)
-            vol_com, r, p_axes = center_of_mass(vols[4]*masks[m_i])
+            vol_com, r, p_axes = center_of_mass(vols[len(vols)//2]*masks[m_i])
             radii.append(r*scale)
             vol_coms.append(vol_com*scale)
             principal_axes.append(p_axes)
 
-        rot_axes = []
         orientations = []
         rot_radii = []
         origin_rel = np.bincount(in_relatives).argmax()
@@ -247,7 +255,6 @@ def main(args):
             rot_axis = torch.cross(r0, r1, dim=-1)
             rot_axis = F.normalize(rot_axis, dim=0)
             r0 = F.normalize(r0, dim=0)
-            rot_axes.append(rot_axis)
             r1 = torch.cross(r0, rot_axis, dim=-1)
             r1 = F.normalize(r1, dim=0)
             mat = torch.stack([r0, r1, rot_axis], dim=0)
@@ -261,16 +268,10 @@ def main(args):
             #print(mat@rot_axis)
             #print(mat@mat.T)
 
-        rot_axes = torch.stack(rot_axes, dim=0)
         orientations = torch.stack(orientations, dim=0)
-        vols = torch.stack(vols, dim=0)
         rot_radii = torch.stack(rot_radii, dim=0)
         vol_coms = torch.stack(vol_coms, dim=0)
         principal_axes = torch.stack(principal_axes, dim=0)
-
-    consensus_mask = masks.mean(dim=0)
-    #weights = F.softmax(masks*4, dim=0)
-    #print(weights.shape)
 
     com_bodies = torch.stack(com_bodies, dim=0)
     if vol_coms is None:
@@ -292,12 +293,14 @@ def main(args):
             orient_bodies.append(utils.align_with_z(-rotate_directions[-1]))
         else:
             orient_bodies.append(utils.align_with_z(rotate_directions[-1]))
-        relats.append(com_bodies[in_relatives[b_i]])
+        # the model computes the lever arm as in_relatives - com_bodies, so the parent center has
+        # to come from the same estimate as the one which is saved as com_bodies below. vol_coms
+        # is com_bodies itself unless the volumes were given
+        relats.append(vol_coms[in_relatives[b_i]])
         #reset rotation axis for center mask
         #if b_i == origin_rel:
         #    rotate_directions_ori[b_i] = com_bodies[b_i] - com_bodies[b_i]
         #normalize direction
-    A_rot90 = lie_tools.yrot(torch.tensor(-90))
     rotate_directions = torch.stack(rotate_directions, dim=0)
     rotate_directions_ori = torch.stack(rotate_directions_ori, dim=0)
     if rot_radii is None:

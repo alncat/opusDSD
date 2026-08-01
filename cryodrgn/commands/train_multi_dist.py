@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys, os
 import argparse
+import contextlib
 import pickle
 from datetime import datetime as dt
 import math
@@ -49,6 +50,7 @@ def add_args(parser):
     parser.add_argument('--group', metavar='pkl', type=os.path.abspath, help='group assignments (.pkl)')
     parser.add_argument('--group-stat', metavar='pkl', type=os.path.abspath, help='group statistics (.pkl)')
     parser.add_argument('--load', metavar='WEIGHTS.PKL', help='Initialize training from a checkpoint')
+    parser.add_argument('--relax-load', action='store_true', help='Continue even when part of the model cannot be loaded from the checkpoint')
     parser.add_argument('--latents', type=os.path.abspath, help='Image latent encodings (.pkl)')
     parser.add_argument('--split', required=True, metavar='pkl', help='Initialize training from a split checkpoint')
     parser.add_argument('--valfrac', type=float, default=0.2, help='the fraction of images held for validation (default: %(default)s)')
@@ -134,29 +136,40 @@ def train_batch(model, lattice, y, yt, rot, trans, optim, beta,
         model.eval()
     if trans is not None:
         y, yt = preprocess_input(y, yt, lattice, trans, vanilla=vanilla)
-    z_mu, z_logstd, z, y_recon, y_recon_tilt, losses, y, y_ffts, mus, \
-        euler_samples, y_recon_ori, neg_mus, mask_sum, body_poses_pred = run_batch(
-                                                                 model, lattice, y, yt, rot,
-                                                                 tilt=tilt, ind=ind, ctf_params=ctf_params,
-                                                                 yr=yr, vanilla=vanilla, ctf_grid=ctf_grid,
-                                                                 grid=grid, save_image=save_image,
-                                                                 group_stat=group_stat, do_scale=do_scale,
-                                                                 trans=trans, it=it, enc=enc,
-                                                                 args=args, euler=euler,
-                                                                 posetracker=posetracker, data=data,
-                                                                 snr2=snr2, body_poses=body_poses, rank=rank, world_size=world_size)
 
-    loss, gen_loss, snr, mu2, std2, mmd, c_mmd, top_euler, mse = loss_function(z_mu, z_logstd, y, yt, y_recon,
-                                        beta, y_recon_tilt, beta_control, vanilla=vanilla,
-                                        group_stat=group_stat, ind=ind, mask_sum=mask_sum,
-                                        losses=losses, args=args, it=it, y_ffts=y_ffts, zs=z,
-                                        mus=mus, neg_mus=neg_mus, y_recon_ori=y_recon_ori, euler_samples=euler_samples,
-                                        snr2=snr2, body_poses=body_poses, body_poses_pred=None)
-    #if top_euler is not None and not update_params:
-    #    posetracker.set_euler(top_euler, ind)
+    with contextlib.ExitStack() as stack:
+        # on the steps which only accumulate gradients, skip the all reduce of ddp and let the
+        # gradients pile up locally, the step which does update the parameters then reduces the
+        # accumulated gradients in one go. the flag is read by ddp during forward, hence the
+        # whole forward-backward has to happen inside the context
+        if backward and not update_params:
+            for parallel in (model.encoder, model.decoder):
+                if isinstance(parallel, DDP):
+                    stack.enter_context(parallel.no_sync())
 
-    if backward:
-        loss.backward()
+        z_mu, z_logstd, z, y_recon, y_recon_tilt, losses, y, y_ffts, mus, \
+            euler_samples, y_recon_ori, neg_mus, mask_sum, body_poses_pred = run_batch(
+                                                                     model, lattice, y, yt, rot,
+                                                                     tilt=tilt, ind=ind, ctf_params=ctf_params,
+                                                                     yr=yr, vanilla=vanilla, ctf_grid=ctf_grid,
+                                                                     grid=grid, save_image=save_image,
+                                                                     group_stat=group_stat, do_scale=do_scale,
+                                                                     trans=trans, it=it, enc=enc,
+                                                                     args=args, euler=euler,
+                                                                     posetracker=posetracker, data=data,
+                                                                     snr2=snr2, body_poses=body_poses, rank=rank, world_size=world_size)
+
+        loss, gen_loss, snr, mu2, std2, mmd, c_mmd, top_euler, mse = loss_function(z_mu, z_logstd, y, yt, y_recon,
+                                            beta, y_recon_tilt, beta_control, vanilla=vanilla,
+                                            group_stat=group_stat, ind=ind, mask_sum=mask_sum,
+                                            losses=losses, args=args, it=it, y_ffts=y_ffts, zs=z,
+                                            mus=mus, neg_mus=neg_mus, y_recon_ori=y_recon_ori, euler_samples=euler_samples,
+                                            snr2=snr2, body_poses=body_poses, body_poses_pred=None)
+        #if top_euler is not None and not update_params:
+        #    posetracker.set_euler(top_euler, ind)
+
+        if backward:
+            loss.backward()
     if update_params:
         optim.step()
         optim.zero_grad()
@@ -544,7 +557,8 @@ def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
     # save model weights
     torch.save({
         'epoch':epoch,
-        'model_state_dict':_unparallelize(model).state_dict(),
+        # encoder and decoder are wrapped separately, model.state_dict() would only be a copy
+        # of the two state dicts below with a module. prefix inserted by DDP, which nothing reads
         'encoder_state_dict':_unparallelize(model.encoder).state_dict(),
         'decoder_state_dict':_unparallelize(model.decoder).state_dict(),
         'optimizer_state_dict':optim.state_dict(),
@@ -821,14 +835,15 @@ def main(args):
     #lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optim, lr_lambda=warm_up_with_cosine_lr)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optim, 1, gamma=0.98)
     # parallelize
-    model.encoder = DDP(model.encoder, device_ids=[rank], find_unused_parameters=False,)
-    model.decoder = DDP(model.decoder, device_ids=[rank], find_unused_parameters=False,)
+    # device_ids must be the local device of this process, rank is global and does not
+    # index the gpus of this node once more than one node is used
+    model.encoder = DDP(model.encoder, device_ids=[local_rank], find_unused_parameters=False,)
+    model.decoder = DDP(model.decoder, device_ids=[local_rank], find_unused_parameters=False,)
 
     # restart from checkpoint
     if args.load:
         flog('Loading checkpoint from {} and mapping to {}'.format(args.load, local_rank))
-        map_location = {"cuda:0": f"cuda:{local_rank}"}
-        checkpoint = torch.load(args.load, map_location=map_location)
+        checkpoint = torch.load(args.load, map_location=device)
         if rank == 0:
             print(checkpoint.keys())
         #pretrained_dict = checkpoint['model_state_dict']
@@ -842,35 +857,11 @@ def main(args):
         #model.load_state_dict(model_dict)
 
         if True:
-            pretrained_dict = checkpoint['encoder_state_dict']
-            model_dict = _unparallelize(model.encoder).state_dict()
-            # 1. filter out unnecessary keys
-            #pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k}
-            for k in list(pretrained_dict.keys()):
-                #if "mu" in k or "logstd" in k:
-                if k not in model_dict or pretrained_dict[k].shape != model_dict[k].shape:
-                    if k in model_dict:
-                        print(k, pretrained_dict[k].shape, model_dict[k].shape)
-                    del pretrained_dict[k]
-            # 2. overwrite entries in the existing state dict
-            model_dict.update(pretrained_dict)
-            # 3. load the new state dict
-            _unparallelize(model.encoder).load_state_dict(model_dict)
-
-            pretrained_dict = checkpoint['decoder_state_dict']
-            model_dict = _unparallelize(model.decoder).state_dict()
-            # 1. filter out unnecessary keys
-            #pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k and "grid" not in k and "radius" not in k}
-            for k in list(pretrained_dict.keys()):
-                #if "affine_" in k or "second_order_head" in k:
-                if k not in model_dict or pretrained_dict[k].shape != model_dict[k].shape:
-                    if k in model_dict:
-                        print(k, pretrained_dict[k].shape, model_dict[k].shape)
-                    del pretrained_dict[k]
-            # 2. overwrite entries in the existing state dict
-            model_dict.update(pretrained_dict)
-            # 3. load the new state dict
-            _unparallelize(model.decoder).load_state_dict(model_dict)
+            strict = not args.relax_load
+            utils.load_matching_state_dict(_unparallelize(model.encoder), checkpoint['encoder_state_dict'],
+                                           name='encoder', strict=strict)
+            utils.load_matching_state_dict(_unparallelize(model.decoder), checkpoint['decoder_state_dict'],
+                                           name='decoder', strict=strict)
             for name, param in model.state_dict().items():
                 if not param.is_contiguous():
                     print(f"Non-contiguous tensor found: {name}")

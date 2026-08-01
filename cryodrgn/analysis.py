@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import pickle
 import matplotlib.pyplot as plt
@@ -448,8 +449,8 @@ def plot_projections(imgs, labels=None):
     return fig, axes
 
 def gen_volumes(weights, config, zfile, outdir, cuda=None,
-                Apix=None, flip=False, downsample=None):
-    '''Call cryodrgn eval_vol to generate volumes at specified z values
+                Apix=None, flip=False, downsample=None, num_bodies=0):
+    '''Call eval_vol to generate volumes at specified z values
     Input:
         weights (str): Path to model weights .pkl
         config (str): Path to config.pkl
@@ -459,18 +460,25 @@ def gen_volumes(weights, config, zfile, outdir, cuda=None,
         Apix (float or None): Apix of output volume
         flip (bool): Flag to flip chirality of output volumes
         downsample (int or None): Generate volumes at this box size
+        num_bodies (int): Number of rigid bodies the model was trained with
     '''
-    cmd = f'cryodrgn eval_vol {weights} --config {config} --zfile {zfile} -o {outdir}'
+    # run through the interpreter which is running this analysis rather than through the dsd
+    # entry point, so that a source checkout which was never pip installed works as well
+    cmd = [sys.executable, '-m', 'cryodrgn', 'eval_vol',
+           '--load', str(weights), '--config', str(config), '--zfile', str(zfile), '-o', str(outdir)]
     if Apix is not None:
-        cmd += f' --Apix {Apix}'
+        cmd += ['--Apix', str(Apix)]
     if flip:
-        cmd += f' --flip'
+        cmd += ['--flip']
     if downsample is not None:
-        cmd += f' -d {downsample}'
+        cmd += ['-d', str(downsample)]
+    if num_bodies:
+        cmd += ['--num-bodies', str(num_bodies)]
+    env = os.environ.copy()
     if cuda is not None:
-        cmd = f'CUDA_VISIBLE_DEVICES={cuda} {cmd}'
-    log(f'Running command:\n{cmd}')
-    return subprocess.check_call(cmd, shell=True)
+        env['CUDA_VISIBLE_DEVICES'] = str(cuda)
+    log('Running command:\n{}'.format(' '.join(cmd)))
+    return subprocess.check_call(cmd, env=env)
 
 def load_dataframe(z=None, pc=None, euler=None, trans=None, labels=None, tsne=None, umap=None, **kwargs):
     '''Load results into a pandas dataframe for downstream analysis'''

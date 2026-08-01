@@ -1,0 +1,85 @@
+'''
+The rigid body parameters parse_multi_pose_star measures off the masks
+
+The principal axes it returns are used as a rotation by the decoder, so they have to be an
+orthonormal right handed frame for every body shape, including the globular ones whose moments of
+inertia are nearly degenerate.
+'''
+import contextlib
+import io
+
+import numpy as np
+import pytest
+import torch
+
+from cryodrgn.commands.parse_multi_pose_star import center_of_mass
+
+N = 32  # box size, keeps the 3d grids small
+
+
+def ellipsoid(semi_axes, center=(0., 0., 0.), rotation=None):
+    '''A solid ellipsoid with the given semi axes, optionally rotated and off center'''
+    idx = torch.linspace(0, N - 1, N) - N / 2
+    zgrid, ygrid, xgrid = torch.meshgrid(idx, idx, idx, indexing='ij')
+    coords = torch.stack([xgrid, ygrid, zgrid], dim=-1) - torch.tensor(center)
+    if rotation is not None:
+        coords = coords @ rotation  # rotate the coordinates, i.e. rotate the body the other way
+    scaled = coords / torch.tensor(semi_axes)
+    return (scaled.pow(2).sum(-1) < 1).float()
+
+
+def rotation_from_quaternion(q):
+    q = q / np.linalg.norm(q)
+    w, x, y, z = q
+    return torch.tensor([[1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+                         [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+                         [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]],
+                        dtype=torch.float32)
+
+
+def com(volume):
+    with contextlib.redirect_stdout(io.StringIO()):  # it prints the radii it measured
+        return center_of_mass(volume)
+
+
+def test_center_of_mass_finds_the_center():
+    center, _, _ = com(ellipsoid((10., 6., 4.), center=(3., -5., 2.)))
+    assert center.numpy() == pytest.approx([3., -5., 2.], abs=0.2)
+
+
+def test_radii_are_ordered_and_reflect_the_shape():
+    '''A rod has a small radius of gyration about its long axis and a large one about the others'''
+    _, radii, _ = com(ellipsoid((14., 3., 3.)))
+    assert radii[0] < radii[1]
+    assert radii[1] == pytest.approx(radii[2], rel=0.05)
+
+
+def test_axes_are_orthonormal_and_right_handed():
+    for semi_axes in [(10., 6., 4.),      # three distinct moments
+                      (12., 12., 3.),     # oblate, two moments equal
+                      (14., 3., 3.),      # prolate, two moments equal
+                      (8., 8., 8.)]:      # a sphere, all three degenerate
+        _, _, axes = com(ellipsoid(semi_axes))
+        assert torch.det(axes) == pytest.approx(1.0, abs=1e-4), \
+            'axes of {} are a reflection'.format(semi_axes)
+        assert (axes @ axes.T - torch.eye(3)).abs().max() < 1e-4, \
+            'axes of {} are not orthonormal'.format(semi_axes)
+
+
+@pytest.mark.parametrize('seed', range(8))
+def test_axes_stay_right_handed_under_rotation(seed):
+    '''np.linalg.eig used to return a reflection for about half of the orientations'''
+    rotation = rotation_from_quaternion(np.random.default_rng(seed).normal(size=4))
+    _, _, axes = com(ellipsoid((11., 7., 5.), rotation=rotation))
+    assert torch.det(axes) == pytest.approx(1.0, abs=1e-4)
+    assert (axes @ axes.T - torch.eye(3)).abs().max() < 1e-4
+
+
+def test_axes_recover_the_orientation_of_the_body():
+    '''The longest axis of the body has the smallest moment, so it comes first'''
+    rotation = rotation_from_quaternion([1., 0.3, -0.2, 0.5])
+    _, _, axes = com(ellipsoid((13., 6., 4.), rotation=rotation))
+    # coords @ rotation applies the transpose to the coordinates, so the body itself is turned by
+    # rotation and its long axis, x before the rotation, ends up along the first column
+    long_axis = rotation @ torch.tensor([1., 0., 0.])
+    assert abs(torch.dot(axes[0].float(), long_axis)) == pytest.approx(1.0, abs=0.02)

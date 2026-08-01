@@ -47,6 +47,7 @@ def add_args(parser):
     parser.add_argument('--group', metavar='pkl', type=os.path.abspath, help='group assignments (.pkl)')
     parser.add_argument('--group-stat', metavar='pkl', type=os.path.abspath, help='group statistics (.pkl)')
     parser.add_argument('--load', metavar='WEIGHTS.PKL', help='Initialize training from a checkpoint')
+    parser.add_argument('--relax-load', action='store_true', help='Continue even when part of the model cannot be loaded from the checkpoint')
     parser.add_argument('--latents', type=os.path.abspath, help='Image latent encodings (.pkl)')
     parser.add_argument('--split', metavar='pkl', help='Initialize training from a split checkpoint')
     parser.add_argument('--valfrac', type=float, default=0.2, help='the fraction of images held for validation')
@@ -551,7 +552,6 @@ def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
     # save model weights
     torch.save({
         'epoch':epoch,
-        'model_state_dict':_unparallelize(model).state_dict(),
         'encoder_state_dict':_unparallelize(model.encoder).state_dict(),
         'decoder_state_dict':_unparallelize(model.decoder).state_dict(),
         'optimizer_state_dict':optim.state_dict(),
@@ -815,34 +815,13 @@ def main(args):
         flog('Loading checkpoint from {}'.format(args.load))
         checkpoint = torch.load(args.load)
         print(checkpoint.keys())
-        pretrained_dict = checkpoint['model_state_dict']
-        model_dict = model.state_dict()
-        #print(pretrained_dict, model_dict)
-        # 1. filter out unnecessary keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-        # 2. overwrite entries in the existing state dict
-        model_dict.update(pretrained_dict)
-        # 3. load the new state dict
-        model.load_state_dict(model_dict)
 
         if True:
-            pretrained_dict = checkpoint['encoder_state_dict']
-            model_dict = model.encoder.state_dict()
-            # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k}
-            # 2. overwrite entries in the existing state dict
-            model_dict.update(pretrained_dict)
-            # 3. load the new state dict
-            model.encoder.load_state_dict(model_dict)
-
-            pretrained_dict = checkpoint['decoder_state_dict']
-            model_dict = model.decoder.state_dict()
-            # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "transformer" not in k and "mask" not in k}
-            # 2. overwrite entries in the existing state dict
-            model_dict.update(pretrained_dict)
-            # 3. load the new state dict
-            model.decoder.load_state_dict(model_dict)
+            strict = not args.relax_load
+            utils.load_matching_state_dict(model.encoder, checkpoint['encoder_state_dict'],
+                                           name='encoder', strict=strict)
+            utils.load_matching_state_dict(model.decoder, checkpoint['decoder_state_dict'],
+                                           name='decoder', strict=strict)
 
         pretrained_pose_dict = checkpoint['pose_state_dict']
         pose_dict = posetracker.state_dict()

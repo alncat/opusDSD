@@ -545,6 +545,64 @@ def load_pkl(pkl):
             x = _CpuUnpickler(f).load()
     return x
 
+def load_matching_state_dict(module, pretrained, name='model', strict=True):
+    '''Load the entries of pretrained which fit module, and report what did not fit
+
+    Buffers are allowed to be absent or to have another shape: they are derived from the box
+    size when the module is built, and legitimately change when a volume is rendered at another
+    pixel size. A parameter which cannot be loaded is a different matter, it means the module was
+    built with different architecture arguments than the ones used during training and stays at
+    its initial value, silently turning off whatever it represents, so it is an error.
+
+    Returns the number of loaded parameters and buffers.
+    '''
+    model_dict = module.state_dict()
+    param_names = {k for k, _ in module.named_parameters()}
+    # checkpoints written while the module was wrapped in DDP or DataParallel carry an extra
+    # module. in every key, accept them as if they had been saved from the bare module
+    pretrained = {k.replace('module.', '', 1) if k.startswith('module.') else k.replace('.module.', '.'): v
+                  for k, v in pretrained.items()}
+
+    matched, absent, mismatched = {}, [], []
+    for k, v in model_dict.items():
+        if k not in pretrained:
+            absent.append(k)
+        elif tuple(pretrained[k].shape) != tuple(v.shape):
+            mismatched.append((k, tuple(pretrained[k].shape), tuple(v.shape)))
+        else:
+            matched[k] = pretrained[k]
+
+    n_params = len(param_names)
+    n_params_loaded = len([k for k in matched if k in param_names])
+    n_buffers = len(model_dict) - n_params
+    n_buffers_loaded = len(matched) - n_params_loaded
+    log('{}: loaded {}/{} parameters and {}/{} buffers from checkpoint'.format(
+        name, n_params_loaded, n_params, n_buffers_loaded, n_buffers))
+
+    skipped_buffers = [k for k in absent if k not in param_names] + \
+                      [k for k, _, _ in mismatched if k not in param_names]
+    if skipped_buffers:
+        vlog('{}: buffers rebuilt from the current box size instead of the checkpoint: {}'.format(
+            name, ', '.join(skipped_buffers)))
+
+    bad_params = [k for k in absent if k in param_names] + \
+                 [k for k, _, _ in mismatched if k in param_names]
+    if bad_params:
+        shapes = {k: (s_ckpt, s_model) for k, s_ckpt, s_model in mismatched}
+        detail = ', '.join('{}{}'.format(k, ' checkpoint {} vs model {}'.format(*shapes[k]) if k in shapes else ' missing')
+                           for k in bad_params[:8])
+        msg = '{}: {} parameter(s) of the model are not in the checkpoint and would be left at their ' \
+              'initial value: {}{}. The model was built with different architecture arguments than the ' \
+              'ones it was trained with, check --zdim/--zaffdim/--num-bodies/--template-type against ' \
+              'config.pkl'.format(name, len(bad_params), detail, ', ...' if len(bad_params) > 8 else '')
+        if strict:
+            raise RuntimeError(msg + '. Pass --relax-load to load anyway')
+        log('WARNING: ' + msg)
+
+    model_dict.update(matched)
+    module.load_state_dict(model_dict)
+    return n_params_loaded, n_buffers_loaded
+
 def load_torch_pkl(zfile):
     load_kwargs = {}
     if "weights_only" in inspect.signature(torch.load).parameters:

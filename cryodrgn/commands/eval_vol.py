@@ -41,6 +41,7 @@ def add_args(parser):
     group.add_argument('--template-z-ind', type=int, help='the index of the selected template encoding')
     group.add_argument('--masks', help='path for the masks')
     group.add_argument('--num-bodies', type=int, default=0, help='number of rigid bodies (default: %(default)s)')
+    group.add_argument('--relax-load', action='store_true', help='Render volumes even when part of the decoder cannot be loaded from the checkpoint')
 
     group = parser.add_argument_group('Volume arguments')
     group.add_argument('--Apix', type=float, default=1, help='Desired pixel size of the output volume (default: %(default)s A/pix)')
@@ -75,6 +76,29 @@ def check_inputs(args):
         assert args.z_end, "Must provide --z-end with argument --z-start"
     assert sum((bool(args.z), bool(args.z_start), bool(args.zfile))) == 1, "Must specify either -z OR --z-start/--z-end OR --zfile"
 
+def output_geometry(cfg, target_apix):
+    '''Work out how the volume rendered by the model has to be resampled to reach target_apix
+
+    During training the images are downsampled to render_size and the volume of interest is
+    cropped out of them, so the model renders crop_vol_size voxels of side Apix, which cover a
+    fixed physical extent. Rendering at another pixel size means rescaling downfrac by the ratio
+    of the two pixel sizes, the cropping fraction stays the same.
+
+    Returns downfrac and window_r to build the model with, and the physical extent of its output.
+    '''
+    D = cfg['lattice_args']['D'] # image size + 1
+    downfrac = cfg['dataset_args']['downfrac']
+    crop_vol_size = cfg['model_args']['down_vol_size']
+    Apix = float(cfg['model_args']['Apix']) # older configs store it as a tensor
+    # reproduce the rounding of HetOnlyVAE to recover the render size used during training
+    render_size = (int((D-1)*downfrac)//2)*2
+    return dict(downfrac=downfrac*Apix/target_apix,
+                window_r=crop_vol_size/render_size,
+                extent=crop_vol_size*Apix,
+                train_apix=Apix,
+                train_render_size=render_size,
+                train_vol_size=crop_vol_size)
+
 def main(args):
     #check_inputs(args)
     t1 = dt.now()
@@ -103,15 +127,10 @@ def main(args):
         z_affine_dim = 4
     norm = cfg['dataset_args']['norm']
     lattice = Lattice(D, extent=0.5)
-    downfrac = cfg['dataset_args']['downfrac']
-    crop_vol_size = cfg['model_args']['down_vol_size']
-    Apix = float(cfg['model_args']['Apix']) # older configs store it as a tensor
     templateres = cfg['model_args']['templateres']
-    #args.Apix = down_vol_size/((D - 1)*downfrac*0.85)*Apix
-    # render_size is the image size used during training, reproduce the rounding done in HetOnlyVAE
-    render_size = (int((D-1)*downfrac)//2)*2
-    window_r = crop_vol_size/render_size
-    downfrac *= Apix/args.Apix
+    geometry = output_geometry(cfg, args.Apix)
+    downfrac, window_r = geometry['downfrac'], geometry['window_r']
+    Apix = geometry['train_apix']
 
     # load masks
     if args.masks:
@@ -141,9 +160,9 @@ def main(args):
                 num_bodies=args.num_bodies, z_affine_dim=z_affine_dim)
 
     # the output box is rounded down to an even number by the model, hence the realized pixel size
-    # can differ slightly from the requested one. the physical size of the volume is invariant,
-    # it always equals crop_vol_size*Apix (the extent cropped out during training)
-    out_apix = crop_vol_size*Apix/model.down_vol_size
+    # can differ slightly from the requested one. the physical extent of the volume is invariant,
+    # it is always the one which was cropped out during training
+    out_apix = geometry['extent']/model.down_vol_size
     log("the final output volume rendered by spatial transformer is of size {}, its apix is {} (requested {})".format(
         model.down_vol_size, out_apix, args.Apix))
 
@@ -153,44 +172,28 @@ def main(args):
         log('Loading checkpoint from {}'.format(args.load))
         checkpoint = torch.load(args.load, map_location="cuda:0")
         print(checkpoint.keys())
-        pretrained_dict = checkpoint['model_state_dict']
-        model_dict = model.state_dict()
-        #print(pretrained_dict, model_dict)
-        # 1. filter out unnecessary keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
-        # 2. overwrite entries in the existing state dict
-        model_dict.update(pretrained_dict)
-        # 3. load the new state dict
-        model.load_state_dict(model_dict)
+        # checkpoints of the parallelized trainers carry the encoder and decoder separately,
+        # model_state_dict is only present in checkpoints written by the older trainers
+        if 'model_state_dict' in checkpoint:
+            pretrained_dict = checkpoint['model_state_dict']
+            model_dict = model.state_dict()
+            #print(pretrained_dict, model_dict)
+            # 1. filter out unnecessary keys
+            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+            # 2. overwrite entries in the existing state dict
+            model_dict.update(pretrained_dict)
+            # 3. load the new state dict
+            model.load_state_dict(model_dict)
 
         if vanilla:
-            pretrained_dict = checkpoint['encoder_state_dict']
-            model_dict = model.encoder.state_dict()
-            # 1. filter out unnecessary keys
-            pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
-            # 2. overwrite entries in the existing state dict
-            model_dict.update(pretrained_dict)
-            # 3. load the new state dict
-            #model.encoder.load_state_dict(model_dict)
+            # only the decoder is needed to render volumes, the encoder is never called here
 
             pretrained_dict = checkpoint['decoder_state_dict']
-            #overwrite ref_mask
+            #overwrite ref_mask, it is not a buffer of this model since it is built without ref_vol
             if "ref_mask" in pretrained_dict:
-                model.decoder.ref_mask =  pretrained_dict["ref_mask"]
-            model_dict = model.decoder.state_dict()
-            # 1. filter out unnecessary keys
-            #pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict and "grid" not in k and "mask" not in k}
-            for k in list(pretrained_dict.keys()):
-                #if "affine_head" in k or "second_order_head" in k:
-                if k not in model_dict or pretrained_dict[k].shape != model_dict[k].shape:
-                    if k in model_dict:
-                        print(k, pretrained_dict[k].shape, model_dict[k].shape)
-                    #if k != "ref_mask":
-                    del pretrained_dict[k]
-            # 2. overwrite entries in the existing state dict
-            model_dict.update(pretrained_dict)
-            # 3. load the new state dict
-            model.decoder.load_state_dict(model_dict)
+                model.decoder.ref_mask = pretrained_dict["ref_mask"]
+            utils.load_matching_state_dict(model.decoder, pretrained_dict, name='decoder',
+                                           strict=not args.relax_load)
 
     model = model.to(device)
 
