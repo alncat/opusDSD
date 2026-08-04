@@ -75,6 +75,53 @@ def test_axes_stay_right_handed_under_rotation(seed):
     assert (axes @ axes.T - torch.eye(3)).abs().max() < 1e-4
 
 
+def multibody_model(with_masks, num_bodies=4, zdim=12, z_affine_dim=6):
+    from cryodrgn.lattice import Lattice
+    from cryodrgn.models import HetOnlyVAE
+    import torch.nn as nn
+    masks = None
+    if with_masks:
+        masks = dict(com_bodies=torch.randn(num_bodies, 3) * 10,
+                     in_relatives=torch.randn(num_bodies, 3),
+                     rotate_directions=torch.randn(num_bodies, 3),
+                     orient_bodies=torch.eye(3).repeat(num_bodies, 1, 1),
+                     principal_axes=torch.eye(3).repeat(num_bodies, 1, 1),
+                     radii_bodies=torch.rand(num_bodies, 3) * 20 + 5)
+    with contextlib.redirect_stdout(io.StringIO()):
+        model = HetOnlyVAE(Lattice(129, extent=0.5), 3, 256, 3, 256, -1, zdim, encode_mode='grad',
+                           enc_mask=-1, enc_type='vanilla', enc_dim=None, domain='fourier',
+                           activation=nn.ReLU, ref_vol=None, Apix=2.0, template_type='conv',
+                           warp_type=None, num_struct=1, device='cpu', symm=None, ctf_grid=None,
+                           deform_emb_size=2, downfrac=0.5, templateres=64, window_r=0.85,
+                           masks_params=masks, num_bodies=num_bodies, z_affine_dim=z_affine_dim)
+    model.eval()
+    return model
+
+
+@pytest.mark.parametrize('z_width', [12, 18], ids=['latent_without_body_motion', 'latent_with_body_motion'])
+def test_decoder_writes_a_volume_on_the_cpu(z_width, tmp_path):
+    '''The decoder used to ask a cpu tensor for its device index, which is -1
+
+    Rendering volumes is a forward pass of the template network, there is no reason it should
+    need a gpu, and the analysis of a finished run is often done on a laptop.
+    '''
+    from cryodrgn import mrc
+    model = multibody_model(with_masks=True)
+    with torch.no_grad():
+        model.decoder.save(str(tmp_path / 'v'), z=torch.randn(1, z_width), Apix=2.0)
+    volume, header = mrc.parse_mrc(str(tmp_path / 'v.mrc'))
+    assert volume.shape == (54, 54, 54)
+    assert header.get_apix() == pytest.approx(2.0)
+
+
+def test_body_motion_without_the_body_geometry_says_what_is_missing(tmp_path):
+    '''--num-bodies alone builds the head but not the geometry the bodies move with'''
+    model = multibody_model(with_masks=False)
+    with pytest.raises(RuntimeError, match='--masks'):
+        with torch.no_grad():
+            model.decoder.save(str(tmp_path / 'v'), z=torch.randn(1, 18), Apix=2.0)
+
+
 def test_origin_body_is_the_most_referenced_one():
     '''_rlnBodyRotateRelativeTo of four bodies which all hang off the second one'''
     assert pick_origin_body([1, 1, 1, 1]) == 1

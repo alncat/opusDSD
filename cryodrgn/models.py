@@ -637,8 +637,8 @@ class Encoder(nn.Module):
         neighbor_pix = neighbor_pix.flatten()
         neighbor_euler1, neighbor_euler0 = hp.pix2ang(hp_order, neighbor_pix, nest=True)
 
-        neighbor_euler0 = torch.tensor(neighbor_euler0).float().to(coords.get_device())/np.pi*180 #(s)
-        neighbor_euler1 = torch.tensor(neighbor_euler1).float().to(coords.get_device())/np.pi*180
+        neighbor_euler0 = torch.tensor(neighbor_euler0).float().to(coords.device)/np.pi*180 #(s)
+        neighbor_euler1 = torch.tensor(neighbor_euler1).float().to(coords.device)/np.pi*180
 
         neighbor_eulers = torch.stack([neighbor_euler0, neighbor_euler1], dim=-1) #(s, neighbor, 2)
         #flatten eulers
@@ -705,8 +705,8 @@ class Encoder(nn.Module):
             x_i = self.transformer_e.rotate_2d(x_i, -euler2, mode='bicubic') #(1, 1, H, W)
 
             if self.training:
-                x_i = x_i*(1. + 0.3*snr*(torch.rand(1).float().to(x.get_device()) - 0.5)) \
-                + 0.2*snr*torch.randn(1).to(x.get_device()) #+ 0.05*torch.rand_like(x_i)
+                x_i = x_i*(1. + 0.3*snr*(torch.rand(1).float().to(x.device) - 0.5)) \
+                + 0.2*snr*torch.randn(1).to(x.device) #+ 0.05*torch.rand_like(x_i)
 
             pos = self.transformer_e.rotate(rot.T) # + 1)/2*(self.crop_vol_size - 1) #(B, 1, H, W, D, 3) x ( B, 1, 1, 3, 3) -> (B, 1, H, W, D, 3)
 
@@ -1274,8 +1274,8 @@ class VanillaDecoder(nn.Module):
             neighbor_euler0 = np.concatenate([neighbor_euler0, rand_angle0], axis=-1)
             neighbor_euler1 = np.concatenate([neighbor_euler1, rand_angle1], axis=-1)
 
-        neighbor_euler0 = torch.tensor(neighbor_euler0).float().to(coords.get_device())/np.pi*180 #(s)
-        neighbor_euler1 = torch.tensor(neighbor_euler1).float().to(coords.get_device())/np.pi*180
+        neighbor_euler0 = torch.tensor(neighbor_euler0).float().to(coords.device)/np.pi*180 #(s)
+        neighbor_euler1 = torch.tensor(neighbor_euler1).float().to(coords.device)/np.pi*180
 
         neighbor_eulers = torch.stack([neighbor_euler0, neighbor_euler1], dim=-1) #(s, neighbor, 2)
         #flatten eulers
@@ -1332,7 +1332,7 @@ class VanillaDecoder(nn.Module):
             losses["l2"] = torch.mean(self.lasso(template)).unsqueeze(0)
             if use_second_order:
                 losses["aff2"] = torch.mean(affine[2].pow(2)).unsqueeze(0)
-            losses["tvl2"] = torch.mean(self.total_variation(template, vol_bound=self.vol_bound)).unsqueeze(0) #torch.tensor(0.).to(template.get_device())
+            losses["tvl2"] = torch.mean(self.total_variation(template, vol_bound=self.vol_bound)).unsqueeze(0) #torch.tensor(0.).to(template.device)
         else:
             losses["l2"] = torch.tensor(0.).to(z.device)
             losses["tvl2"] = torch.tensor(0.).to(z.device)
@@ -1378,7 +1378,7 @@ class VanillaDecoder(nn.Module):
                         #Rz1 = lie_tools.zrot(-euler_i[..., 2])
                         #print(R, Rz - Rz1, Rz @ Rh)
 
-                        rand_ang = (torch.rand(1, 1).to(euler.get_device()) - .5)*360
+                        rand_ang = (torch.rand(1, 1).to(euler.device) - .5)*360
                         #rand_ang = torch.zeros(1, 1).to(euler.get_device())
                         #rand_ang = euler_i[:, 2:]
 
@@ -1555,7 +1555,7 @@ class VanillaDecoder(nn.Module):
                 if refine_pose:
                     euler_i = euler[i:i+1,...] #(B, 3)
 
-                    rand_ang = (torch.rand(1, 1).to(euler.get_device()) - .5)*360
+                    rand_ang = (torch.rand(1, 1).to(euler.device) - .5)*360
 
                     euler2_sample_i = -euler_i[:, 2] #(1,) hopf angle == minus of euler angle
                     euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
@@ -1636,7 +1636,8 @@ class VanillaDecoder(nn.Module):
 
     def save_mrc(self, template, filename, flip=False):
         with torch.no_grad():
-            dev_id = template.get_device()
+            # one file per gpu, a cpu tensor has no index and writes the file the first gpu would
+            dev_id = template.device.index if template.device.index is not None else 0
             if self.use_fourier:
                 start = (self.templateres - self.vol_size)//2 - 1
                 template_FT = template[..., start:start+self.vol_size, start:start+self.vol_size, \
@@ -1655,12 +1656,18 @@ class VanillaDecoder(nn.Module):
         if self.template_type == "conv":
             template, affine = self.template(z)
             if affine is not None:
+                if not hasattr(self, 'orient_bodies'):
+                    raise RuntimeError(
+                        'the latent has {} dimensions beyond zdim, which drive the rigid body '
+                        'motion, but this model was built without the geometry of the bodies. '
+                        'Pass --masks with the pkl parse_multi_pose_star wrote'.format(
+                            z.shape[-1] - self.zdim))
                 body_quat_i = affine[0][0, ...]
                 one = torch.ones_like(affine[1][0, :, :1])*16.
                 body_trans_i = torch.cat([one, affine[1][0, ...]], dim=-1)
                 body_trans_i = lie_tools.quaternions_to_SO3_wiki(body_trans_i)
 
-                i_euler = torch.zeros(1, 2).to(body_quat_i.get_device())
+                i_euler = torch.zeros(1, 2).to(body_quat_i.device)
                 rot_i = lie_tools.hopf_to_SO3(i_euler).unsqueeze(1).unsqueeze(1)
 
                 rot_resi_i = lie_tools.quaternions_to_SO3_wiki(body_quat_i)
@@ -1672,12 +1679,17 @@ class VanillaDecoder(nn.Module):
                 body_trans_i = self.orient_bodiesT @ body_trans_i[:self.num_bodies, ...] @ self.orient_bodies
                 body_trans_i = (body_trans_i @ self.rotate_directions.unsqueeze(-1)) - self.rotate_directions.unsqueeze(-1) #+ self.in_relatives.unsqueeze(-1)
                 body_trans_i = body_trans_i.squeeze(-1)
-                zero_3d = torch.zeros(1, 3).to(body_quat_i.get_device())
+                zero_3d = torch.zeros(1, 3).to(body_quat_i.device)
                 #affine_grid_i, valid, trans_img = self.transformer.multi_body_grid(rot_i, rot_resi_i, self.com_bodies/self.vol_size,
                 #                                                                zero_3d, body_trans_i, radius=self.radius,)
-                #print(affine[2])
+                # axes has to be passed here exactly as it is during training: it takes the
+                # coordinates into the principal frame of every body, which is the frame radius is
+                # measured along, so without it the anisotropic weight blending the bodies is
+                # oriented wrongly. second_coeffs is absent unless the model fits second order
+                second_coeffs = affine[2][0, ...] if affine[2] is not None else None
                 affine_grid_i, valid, trans_img = self.transformer.multi_sh_grid(rot_i, rot_resi_i, self.com_bodies/self.vol_size,
-                                                                        zero_3d, body_trans_i, radius=self.radius, second_coeffs=affine[2][0, ...],)
+                                                                        zero_3d, body_trans_i, radius=self.radius,
+                                                                        second_coeffs=second_coeffs, axes=self.principal_axesT)
                 template = F.grid_sample(template, affine_grid_i, align_corners=ALIGN_CORNERS)
                 if self.ref_mask is not None:
                     mask = F.grid_sample(self.ref_mask, affine_grid_i, align_corners=ALIGN_CORNERS)

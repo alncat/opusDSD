@@ -170,7 +170,8 @@ def main(args):
 
     if args.load:
         log('Loading checkpoint from {}'.format(args.load))
-        checkpoint = torch.load(args.load, map_location="cuda:0")
+        # map onto the device this run picked, the checkpoint was written on whichever gpu trained it
+        checkpoint = torch.load(args.load, map_location=device)
         print(checkpoint.keys())
         # checkpoints of the parallelized trainers carry the encoder and decoder separately,
         # model_state_dict is only present in checkpoints written by the older trainers
