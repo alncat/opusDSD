@@ -40,13 +40,21 @@ def test_a_parameter_which_does_not_fit_is_an_error():
     assert 'checkpoint (4, 4) vs model (8, 4)' in str(e.value)
 
 
-def test_a_missing_parameter_is_an_error():
+def test_a_parameter_the_checkpoint_never_had_is_reported_but_allowed(capsys):
+    '''ztest was trained before affine_head grew a bias, and that bias is zero initialized
+
+    Refusing to load such a checkpoint would be refusing to read anyone's older results, so say
+    which parameters kept their initial value and go on.
+    '''
     src, dst = Small(), Small()
+    src.lin.weight.data.fill_(0.5)
     state = src.state_dict()
     del state['lin.bias']
-    with pytest.raises(RuntimeError) as e:
-        utils.load_matching_state_dict(dst, state, name='small')
-    assert 'lin.bias missing' in str(e.value)
+    n_params, _ = utils.load_matching_state_dict(dst, state, name='small')
+    assert n_params == 1
+    assert torch.equal(dst.lin.weight, src.lin.weight)
+    out = capsys.readouterr().out
+    assert 'WARNING' in out and 'lin.bias' in out
 
 
 def test_buffers_may_change_shape():

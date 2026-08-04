@@ -585,16 +585,27 @@ def load_matching_state_dict(module, pretrained, name='model', strict=True):
         vlog('{}: buffers rebuilt from the current box size instead of the checkpoint: {}'.format(
             name, ', '.join(skipped_buffers)))
 
-    bad_params = [k for k in absent if k in param_names] + \
-                 [k for k, _, _ in mismatched if k in param_names]
-    if bad_params:
-        shapes = {k: (s_ckpt, s_model) for k, s_ckpt, s_model in mismatched}
-        detail = ', '.join('{}{}'.format(k, ' checkpoint {} vs model {}'.format(*shapes[k]) if k in shapes else ' missing')
-                           for k in bad_params[:8])
-        msg = '{}: {} parameter(s) of the model are not in the checkpoint and would be left at their ' \
-              'initial value: {}{}. The model was built with different architecture arguments than the ' \
-              'ones it was trained with, check --zdim/--zaffdim/--num-bodies/--template-type against ' \
-              'config.pkl'.format(name, len(bad_params), detail, ', ...' if len(bad_params) > 8 else '')
+    # a parameter which the checkpoint does not have at all is usually one which was added to the
+    # architecture after that checkpoint was written, and it keeps whatever the model initialized
+    # it to, so say so and carry on
+    absent_params = [k for k in absent if k in param_names]
+    if absent_params:
+        log('WARNING: {}: {} parameter(s) are not in the checkpoint and stay at the value the '
+            'model initialized them to: {}{}. This is expected of a checkpoint written before '
+            'they were added to the architecture'.format(
+                name, len(absent_params), ', '.join(absent_params[:8]),
+                ', ...' if len(absent_params) > 8 else ''))
+
+    # a parameter which is there but has another shape means the model was built to a different
+    # architecture than the one which was trained, and the weights simply do not belong to it
+    wrong_params = [(k, s_ckpt, s_model) for k, s_ckpt, s_model in mismatched if k in param_names]
+    if wrong_params:
+        detail = ', '.join('{} checkpoint {} vs model {}'.format(*entry) for entry in wrong_params[:8])
+        msg = '{}: {} parameter(s) of the model have another shape in the checkpoint and would be ' \
+              'left at their initial value: {}{}. The model was built with different architecture ' \
+              'arguments than the ones it was trained with, check ' \
+              '--zdim/--zaffdim/--num-bodies/--template-type against config.pkl'.format(
+                  name, len(wrong_params), detail, ', ...' if len(wrong_params) > 8 else '')
         if strict:
             raise RuntimeError(msg + '. Pass --relax-load to load anyway')
         log('WARNING: ' + msg)
