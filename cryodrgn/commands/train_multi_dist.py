@@ -68,6 +68,7 @@ def add_args(parser):
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
     group.add_argument('--lazy-single', default=True, action='store_true', help='the dataloader for opus-DSD')
     group.add_argument('--second-order', default=False, action='store_true', help='Enabling second order correction when modelling dynamics (default: %(default)s)')
+    group.add_argument('--phase-flip', default=False, action='store_true', help='Phase flip the images and compare them against the projection multiplied by |ctf| (default: %(default)s)')
     group.add_argument('--inmem', default=False, action='store_true', help='Reading all images into memory (default: %(default)s)')
 
     group = parser.add_argument_group('Tilt series')
@@ -230,6 +231,8 @@ def run_batch(model, lattice, y, yt, rot, tilt=None, ind=None, ctf_params=None,
             #random_b = np.random.rand()*2.
             random_b = np.random.gamma(0.8, 0.5)
             c = ctf.compute_ctf(freqs, *torch.split(ctf_param[:,1:], 1, 1), bfactor=args.bfactor + random_b).view(B,D-1,-1) #(B, )
+            if args.phase_flip:
+                y, c = ctf.phase_flip(y, c)
 
     # encode
     if vanilla:
@@ -607,6 +610,7 @@ def save_config(args, dataset, lattice, model, out_config):
                       down_vol_size=model.down_vol_size,
                       Apix=float(model.decoder.Apix),
                       templateres=model.templateres,
+                      phase_flip=args.phase_flip,
                       second_order=args.second_order)
     config = dict(dataset_args=dataset_args,
                   lattice_args=lattice_args,

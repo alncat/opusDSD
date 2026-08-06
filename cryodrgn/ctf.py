@@ -4,6 +4,32 @@ from . import fft
 from . import utils
 log = utils.log
 
+def hermitian_sign(c):
+    '''sign(c) laid out so that multiplying a half spectrum by it still describes a real image
+
+    rfft2 stores the columns x=0 and x=nyquist only once, so for those the coefficients at +y and
+    -y have to stay conjugate. irfft2 does not report a spectrum which breaks that, it silently
+    drops the part which does not fit and the image loses energy. The ctf as it is evaluated on
+    the grid of CTFGrid is not even in y, so mirror those two columns.
+    '''
+    sign = torch.sign(c)
+    half = c.shape[-2]//2
+    for x in (0, c.shape[-1] - 1):
+        column = sign[..., x]
+        sign[..., x] = torch.cat([column[..., :half+1], column[..., 1:half].flip(-1)], dim=-1)
+    return sign
+
+def phase_flip(images, c):
+    '''Flip the phases of images, and return the ctf to compare them against
+
+    Comparing phase flipped images against |ctf| times a projection is the same least squares
+    problem as comparing the raw images against ctf times the projection, sign(ctf)**2 is one
+    wherever ctf is not zero. What differs is the reference a real space mask is applied to.
+    c carries a b factor envelope, which is positive and does not affect the sign.
+    '''
+    flipped = fft.torch_ifft2_center(fft.torch_fft2_center(images)*hermitian_sign(c).unsqueeze(1))
+    return flipped, c.abs()
+
 def compute_ctf(freqs, dfu, dfv, dfang, volt, cs, w, phase_shift=0, bfactor=None, mtf=None):
     '''
     Compute the 2D CTF
