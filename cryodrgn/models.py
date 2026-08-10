@@ -1399,8 +1399,10 @@ class VanillaDecoder(nn.Module):
 
                         i_euler = torch.cat([euler_i[..., :2], rand_ang], dim=-1)
                         rot_i = lie_tools.hopf_to_SO3(i_euler).unsqueeze(1).unsqueeze(1)
-                        t_i = trans[i:i+1, ...]
-                        t_i -= t_i#.round()
+                        # the shift is carried by the images, not by the grid, so start from zero.
+                        # subtracting in place would write through the view into the caller's
+                        # trans, which anything reusing that tensor afterwards then reads back
+                        t_i = torch.zeros_like(trans[i:i+1, ...])
 
                         # get the residual rotation, and body trans
                         if self.num_bodies > 1:
