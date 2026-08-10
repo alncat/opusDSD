@@ -31,13 +31,21 @@ def center_of_mass(volume):
     center /= mass
     #center = torch.where(center > 0, (center + 0.5).int(), (center - 0.5).int()).float()
     centered = (grid - center)
-    radius = (centered).pow(2)*vol
-    r = torch.sqrt(radius.sum(dim=(0,1,2))/mass)
-    #principal axes
-    matrix = -centered.unsqueeze(-1) * centered.unsqueeze(-2)
-    radius_sum = torch.eye(3) * (radius.sum(dim=-1, keepdim=True).unsqueeze(-1))
-    #print((matrix*(vol.unsqueeze(-1))).sum(dim=(0,1,2)), radius_sum.sum(dim=(0,1,2)))
-    matrix = ((matrix*vol.unsqueeze(-1)+radius_sum)).sum(dim=(0, 1, 2))
+    weight = vol.squeeze(-1)
+    # the inertia tensor, sum(w*(|x|^2 I - x x^T)), accumulated one component at a time. Writing
+    # it as one expression needs a (N, N, N, 3, 3) tensor, 1.2 GB for a 320 box, twice over
+    r = torch.empty(3)
+    for i in range(3):
+        r[i] = (centered[..., i].pow(2)*weight).sum()
+    r_squared = r.sum()
+    r = torch.sqrt(r/mass)
+    matrix = torch.eye(3)*r_squared
+    for i in range(3):
+        for j in range(i, 3):
+            entry = (centered[..., i]*centered[..., j]*weight).sum()
+            matrix[i, j] -= entry
+            if i != j:
+                matrix[j, i] -= entry
     # the inertia tensor is symmetric by construction, so use eigh: it returns real eigenvalues in
     # ascending order and orthonormal eigenvectors. eig guarantees neither, and for a body whose
     # two smallest moments are close, which is the case for anything globular, it returns axes
