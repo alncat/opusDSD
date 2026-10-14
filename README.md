@@ -481,3 +481,24 @@ To use the notebook:
 pip install notebook plotly ipywidgets anywidget
 ```
 if they are not already present in your environment.
+
+### Multi-body mask radius semantics
+
+New multi-body models use the mask's spatial RMS extent **along** each principal
+axis, rather than its radius of gyration **about** that axis. These are Gaussian
+widths, not literal mask diameters or surface semi-axes. The old convention made
+an elongated body's blending width smallest along its long axis.
+
+`parse_multi_pose_star` measures weighted coordinate projections and writes
+`radii_kind="spatial_rms"` for both mask- and volume-derived geometry. Untagged
+historical geometry is interpreted as `inertia_rms` and converted at model
+construction via `s_i^2 = sum_j(R_j^2)/2 - R_i^2`. Tagged spatial radii are not
+converted again; invalid widths are rejected. Axes, their ordering and voxel
+units are unchanged. A from-scratch run can therefore use an existing geometry
+file without regenerating it, but its blending widths will change.
+
+Already-trained checkpoints restore their saved `radius` buffers unchanged.
+New checkpoints carry `_spatial_blend_radii=1`; checkpoints without that tag are
+marked `0` when loaded and retain this legacy marker when saved again. Resume
+and volume export thus preserve the trained geometry rather than silently
+reinterpreting old widths. Use fresh training to adopt the corrected geometry.

@@ -57,8 +57,16 @@ def center_of_mass(volume):
     if torch.det(eigvecs) < 0:
         # the axes are used as a rotation downstream, a reflection would mirror the body
         eigvecs[0] = -eigvecs[0]
-    r_p = torch.sqrt(eigvals/mass)
-    print("r, r_p: ", r, r_p)
+    # Inertia eigenvalues measure distances perpendicular to each axis.
+    # Blending needs spatial width ALONG that axis. Direct projections also
+    # avoid subtracting nearly equal eigenvalues for thin bodies.
+    r_p = torch.stack([
+        (((centered * axis).sum(-1).square() * weight).sum()/mass).sqrt()
+        for axis in eigvecs
+    ])
+    if not torch.isfinite(r_p).all() or not (r_p > 0).all():
+        raise ValueError('Body must have finite, positive spatial width along all three axes')
+    print("xyz RMS, principal spatial RMS: ", r, r_p)
 
     return center, r_p, eigvecs
 
@@ -356,7 +364,8 @@ def main(args):
     log(f'Writing parameters to {output_name}')
     if not args.volumes:
         torch.save({"in_relatives": relats, "com_bodies": com_bodies,
-                "orient_bodies": orient_bodies, "rotate_directions": rotate_directions_ori, "radii_bodies": radii_bodies, "principal_axes": axes}, \
+                "orient_bodies": orient_bodies, "rotate_directions": rotate_directions_ori, "radii_bodies": radii_bodies, "principal_axes": axes,
+                "radii_kind": "spatial_rms"}, \
     #            #"weights": weights, "consensus_mask": consensus_mask},
                output_name)
     else:
@@ -365,7 +374,8 @@ def main(args):
         print("principal_axes from volumes: ", principal_axes)
         print("radii_bodies from volumes: ", radii_bodies)
         torch.save({"in_relatives": relats, "com_bodies": vol_coms,
-                "orient_bodies": orientations, "rotate_directions": rot_radii, "radii_bodies": radii_bodies, "principal_axes": principal_axes,},  \
+                "orient_bodies": orientations, "rotate_directions": rot_radii, "radii_bodies": radii_bodies, "principal_axes": principal_axes,
+                "radii_kind": "spatial_rms"},  \
                 #"weights": weights, "consensus_mask": consensus_mask},
                output_name)
     # shift of each rigid body in experimental data is selfRound(my_old_offset - Aori*com) + ibody_offset

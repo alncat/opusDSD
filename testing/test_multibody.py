@@ -48,10 +48,21 @@ def test_center_of_mass_finds_the_center():
 
 
 def test_radii_are_ordered_and_reflect_the_shape():
-    '''A rod has a small radius of gyration about its long axis and a large one about the others'''
+    '''Spatial blending must be widest ALONG a rod, not about its rotation axis.'''
     _, radii, _ = com(ellipsoid((14., 3., 3.)))
-    assert radii[0] < radii[1]
+    assert radii[0] > 3*radii[1]
     assert radii[1] == pytest.approx(radii[2], rel=0.05)
+
+
+@pytest.mark.parametrize('rotated', [False, True])
+def test_radii_equal_direct_mask_projections(rotated):
+    rotation = rotation_from_quaternion(np.array([.7, .2, -.3, .4])) if rotated else None
+    volume = ellipsoid((12., 7., 4.), center=(1., -2., 0.), rotation=rotation)
+    center, radii, axes = com(volume)
+    xyz = torch.nonzero(volume).flip(-1).float() - N/2
+    projected = (xyz-center) @ axes.T
+    expected = projected.square().mean(0).sqrt()
+    torch.testing.assert_close(radii, expected, atol=1e-5, rtol=1e-5)
 
 
 def test_axes_are_orthonormal_and_right_handed():
@@ -86,7 +97,8 @@ def multibody_model(with_masks, num_bodies=4, zdim=12, z_affine_dim=6):
                      rotate_directions=torch.randn(num_bodies, 3),
                      orient_bodies=torch.eye(3).repeat(num_bodies, 1, 1),
                      principal_axes=torch.eye(3).repeat(num_bodies, 1, 1),
-                     radii_bodies=torch.rand(num_bodies, 3) * 20 + 5)
+                     radii_bodies=torch.rand(num_bodies, 3) * 20 + 5,
+                     radii_kind='spatial_rms')
     with contextlib.redirect_stdout(io.StringIO()):
         model = HetOnlyVAE(Lattice(129, extent=0.5), 3, 256, 3, 256, -1, zdim, encode_mode='grad',
                            enc_mask=-1, enc_type='vanilla', enc_dim=None, domain='fourier',

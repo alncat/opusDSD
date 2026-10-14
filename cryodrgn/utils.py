@@ -545,6 +545,31 @@ def load_pkl(pkl):
             x = _CpuUnpickler(f).load()
     return x
 
+def spatial_body_radii(masks_params):
+    """Spatial RMS along stored principal axes, in source-box voxels.
+
+    Untagged historical geometry stores sqrt(inertia eigenvalue / mass).
+    Convert at construction without mutating the geometry. Saved checkpoint
+    radius buffers are restored unchanged, not passed through this helper.
+    """
+    radii = masks_params['radii_bodies']
+    kind = masks_params.get('radii_kind', 'inertia_rms')
+    if (radii.ndim != 2 or radii.shape[-1] != 3 or
+            not torch.is_floating_point(radii) or
+            not torch.isfinite(radii).all() or not (radii > 0).all()):
+        raise ValueError('radii_bodies must be finite positive floating-point (bodies, 3) radii')
+    if kind == 'spatial_rms':
+        return radii
+    if kind != 'inertia_rms':
+        raise ValueError('Unknown radii_kind: {}'.format(kind))
+    squared = radii.double().square()
+    variance = squared.sum(-1, keepdim=True)*.5 - squared
+    if not torch.isfinite(variance).all() or not (variance > 0).all():
+        raise ValueError('Inertia radii imply nonpositive spatial variance; regenerate the body '
+                         'geometry from its masks (or tag spatial radii as spatial_rms)')
+    return variance.sqrt().to(radii.dtype)
+
+
 def load_matching_state_dict(module, pretrained, name='model', strict=True):
     '''Load the entries of pretrained which fit module, and report what did not fit
 
@@ -562,6 +587,14 @@ def load_matching_state_dict(module, pretrained, name='model', strict=True):
     # module. in every key, accept them as if they had been saved from the bare module
     pretrained = {k.replace('module.', '', 1) if k.startswith('module.') else k.replace('.module.', '.'): v
                   for k, v in pretrained.items()}
+
+    # Do this before merging: otherwise the destination's new tag would
+    # silently relabel legacy checkpoint radius buffers as corrected widths.
+    for key, value in model_dict.items():
+        if key.split('.')[-1] == '_spatial_blend_radii' and key not in pretrained:
+            radius_key = key[:-len('_spatial_blend_radii')] + 'radius'
+            if radius_key in pretrained:
+                pretrained[key] = torch.zeros_like(value)
 
     matched, absent, mismatched = {}, [], []
     for k, v in model_dict.items():
