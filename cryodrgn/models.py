@@ -1111,8 +1111,11 @@ class VanillaDecoder(nn.Module):
                     self.register_buffer("principal_axes", masks_params["principal_axes"])
                     self.register_buffer("principal_axesT", torch.transpose(masks_params["principal_axes"], 1, 2))
                     self.register_buffer("A_rot90", lie_tools.yrot(torch.tensor(-90)))
-                    #scale change the original scale in render_size to the volume size after cropping
-                    self.register_buffer("radius", masks_params["radii_bodies"]/self.vol_size)
+                    # Blend along each principal axis using its spatial extent,
+                    # not the radius of gyration about that axis. Checkpoint
+                    # loading below preserves already-trained radius buffers.
+                    self.register_buffer("_spatial_blend_radii", torch.tensor(1))
+                    self.register_buffer("radius", utils.spatial_body_radii(masks_params)/self.vol_size)
                     if rank == 0:
                         log(f"decoder: com of bodies are {self.com_bodies}, rg of bodies are {self.radius*self.scale}, scale is {self.scale}")
                         log(f"decoder: rotate_directions are {self.rotate_directions}")
@@ -1187,6 +1190,22 @@ class VanillaDecoder(nn.Module):
                 print(self.circle_mask.shape)
 
         self.warp_type = warp_type
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                              missing_keys, unexpected_keys, error_msgs):
+        radius_key = prefix + 'radius'
+        kind_key = prefix + '_spatial_blend_radii'
+        if hasattr(self, '_spatial_blend_radii') and radius_key in state_dict:
+            if kind_key not in state_dict:
+                state_dict[kind_key] = torch.zeros_like(self._spatial_blend_radii)
+            kind = state_dict[kind_key]
+            if kind.numel() != 1 or kind.item() not in (0, 1):
+                error_msgs.append('Invalid spatial blend radius checkpoint tag')
+            elif kind.item() == 0:
+                log('WARNING: restoring legacy checkpoint blend radii unchanged; '
+                    'spatial RMS correction applies to new training, not this checkpoint.')
+        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
+                                     missing_keys, unexpected_keys, error_msgs)
 
     def symmetrise_template(self, template, grid):
         B = template.shape[0]

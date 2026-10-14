@@ -93,7 +93,7 @@ def build_decoder(num_bodies):
                      rotate_directions=torch.randn(num_bodies, 3),
                      orient_bodies=torch.eye(3).repeat(num_bodies, 1, 1),
                      principal_axes=torch.eye(3).repeat(num_bodies, 1, 1),
-                     radii_bodies=torch.rand(num_bodies, 3))
+                     radii_bodies=torch.rand(num_bodies, 3), radii_kind='spatial_rms')
     with contextlib.redirect_stdout(io.StringIO()):
         model = HetOnlyVAE(Lattice(129, extent=0.5), 3, 256, 3, 256, -1, 8, encode_mode='grad',
                            enc_mask=-1, enc_type='vanilla', enc_dim=None, domain='fourier',
