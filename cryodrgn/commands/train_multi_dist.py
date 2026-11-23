@@ -68,6 +68,9 @@ def add_args(parser):
     group.add_argument('--relion31', action='store_true', help='Flag if relion3.1 star format')
     group.add_argument('--lazy-single', default=True, action='store_true', help='the dataloader for opus-DSD')
     group.add_argument('--second-order', default=False, action='store_true', help='Enabling second order correction when modelling dynamics (default: %(default)s)')
+    group.add_argument('--image-center', choices=('fft', 'grid'),
+                       help='Particle origin for grad encoding and reconstruction targets. '
+                            'Fresh runs use grid; resumes inherit the checkpoint (legacy: fft).')
     group.add_argument('--phase-flip', default=False, action='store_true', help='Phase flip the images and compare them against the projection multiplied by |ctf| (default: %(default)s)')
     group.add_argument('--inmem', default=False, action='store_true', help='Reading all images into memory (default: %(default)s)')
 
@@ -554,6 +557,16 @@ def eval_z(model, lattice, data, batch_size, device, trans=None, use_tilt=False,
     z_logvar_all = np.vstack(z_logvar_all)
     return z_mu_all, z_logvar_all
 
+def resolve_image_center(requested, encode_mode, checkpoint):
+    if requested is not None:
+        if requested == 'grid' and encode_mode != 'grad':
+            raise ValueError('--image-center grid requires the grad image encoder')
+        return requested
+    if checkpoint is not None:
+        return checkpoint.get('image_center', 'fft')
+    return 'grid' if encode_mode == 'grad' else 'fft'
+
+
 def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
                     z_mu, z_logvar, out_weights, out_z, vanilla=False, pose_encoder=None, out_pose=""):
     '''Save model weights, latent encoding z, and decoder volumes'''
@@ -562,6 +575,7 @@ def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
         'epoch':epoch,
         # encoder and decoder are wrapped separately, model.state_dict() would only be a copy
         # of the two state dicts below with a module. prefix inserted by DDP, which nothing reads
+        'image_center': getattr(_unparallelize(model.encoder), 'image_center', 'fft'),
         'encoder_state_dict':_unparallelize(model.encoder).state_dict(),
         'decoder_state_dict':_unparallelize(model.decoder).state_dict(),
         'optimizer_state_dict':optim.state_dict(),
@@ -600,6 +614,7 @@ def save_config(args, dataset, lattice, model, out_config):
                       pdim=args.pdim,
                       zdim=args.zdim,
                       z_affine_dim=args.zaffdim,
+                      image_center=getattr(args, 'image_center', None) or 'fft',
                       encode_mode=args.encode_mode,
                       enc_mask=args.enc_mask,
                       pe_type=args.pe_type,
@@ -763,6 +778,11 @@ def main(args):
         group_assignment = None
         group_stat = None
 
+    checkpoint = torch.load(args.load, map_location=device) if args.load else None
+    args.image_center = resolve_image_center(args.image_center, args.encode_mode, checkpoint)
+    if rank == 0:
+        flog(f'Particle image center: {args.image_center}')
+
     # instantiate model
     lattice = Lattice(D, extent=0.5)
     grid = Grid(D, device)
@@ -800,7 +820,7 @@ def main(args):
                 tmp_prefix=args.tmp_prefix,
                 masks_params=masks_params,
                 z_affine_dim=args.zaffdim,
-                rank=rank)
+                image_center=args.image_center, rank=rank)
 
     if rank == 0:
         flog(model)
@@ -847,7 +867,6 @@ def main(args):
     # restart from checkpoint
     if args.load:
         flog('Loading checkpoint from {} and mapping to {}'.format(args.load, local_rank))
-        checkpoint = torch.load(args.load, map_location=device)
         if rank == 0:
             print(checkpoint.keys())
         #pretrained_dict = checkpoint['model_state_dict']

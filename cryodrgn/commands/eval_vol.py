@@ -157,6 +157,7 @@ def main(args):
                 device=device, symm=args.symm, ctf_grid=None,
                 deform_emb_size=args.deform_size, downfrac=downfrac,
                 templateres=templateres, window_r=window_r, masks_params=masks_params,
+                image_center=cfg['model_args'].get('image_center', 'fft'),
                 num_bodies=args.num_bodies, z_affine_dim=z_affine_dim)
 
     # the output box is rounded down to an even number by the model, hence the realized pixel size

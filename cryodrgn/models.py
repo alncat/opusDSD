@@ -49,7 +49,7 @@ class HetOnlyVAE(nn.Module):
             masks_params=None,
             num_bodies=0,
             z_affine_dim=4,
-            rank=0):
+            rank=0, image_center="fft"):
         super(HetOnlyVAE, self).__init__()
         self.lattice = lattice
         self.zdim = zdim
@@ -112,7 +112,8 @@ class HetOnlyVAE(nn.Module):
         elif encode_mode == 'grad':
             self.encoder = Encoder(self.zdim, lattice.D, crop_vol_size=self.encoder_crop_size,
                                    in_mask=ref_vol, window_r=self.window_r,
-                                   render_size=self.encoder_image_size, z_affine_dim=self.z_affine_dim, rank=rank)
+                                   render_size=self.encoder_image_size, z_affine_dim=self.z_affine_dim, rank=rank,
+                                   image_center=image_center)
             self.fixed_deform = True
         else:
             raise RuntimeError('Encoder mode {} not recognized'.format(encode_mode))
@@ -162,6 +163,7 @@ class HetOnlyVAE(nn.Module):
                           c['qlayers'], c['qdim'],
                           c['players'], c['pdim'],
                           in_dim, c['zdim'],
+                          image_center=c.get('image_center', 'fft'),
                           encode_mode=c['encode_mode'],
                           enc_mask=enc_mask,
                           enc_type=c['pe_type'],
@@ -511,8 +513,11 @@ class AffineMixWeight(nn.Module):
         return out
 
 class Encoder(nn.Module):
-    def __init__(self, zdim, D, crop_vol_size, in_mask=None, window_r=None, render_size=None, z_affine_dim=4, rank=0):
+    def __init__(self, zdim, D, crop_vol_size, in_mask=None, window_r=None, render_size=None, z_affine_dim=4, rank=0, image_center="fft"):
         super(Encoder, self).__init__()
+        if image_center not in ("fft", "grid"):
+            raise ValueError(f"Unknown image center: {image_center}")
+        self.image_center = image_center
 
         self.zdim = zdim
         self.inchannels = 1
@@ -605,6 +610,20 @@ class Encoder(nn.Module):
         img = img*torch.exp(-s2*bfactor*np.pi**2)
         return img
 
+    def particle_fft(self, image, translation):
+        """Apply the particle origin and center the image before any in-plane rotation."""
+        spectrum = fft.torch_fft2_center(image, center_fft=True)
+        scale = self.render_size / self.vol_size
+        spectrum = utils.crop_fft(spectrum, self.render_size) * scale**2
+        shift = -translation * self.render_size / self.vol_size
+        if self.image_center == "grid":
+            # FFT origin after the centered crop, in render pixels. translate_ft2d
+            # uses a positive phase, so a positive argument moves content left/up.
+            crop_start = (self.render_size - self.crop_vol_size) // 2
+            fft_origin = self.render_size // 2 - crop_start
+            shift = shift + (fft_origin - (self.crop_vol_size - 1) / 2)
+        return self.translate_ft2d(spectrum, shift)
+
     def translate_ft2d(self, img, t):
         '''
         Inputs:
@@ -685,9 +704,7 @@ class Encoder(nn.Module):
             # do data augmentation to here
             x_i = x[i:i+1]
             if True:
-                x_fft = fft.torch_fft2_center(x_i, center_fft=True)
-                x_fft = utils.crop_fft(x_fft, self.render_size)*(self.render_size/self.vol_size)**2
-                x_fft = self.translate_ft2d(x_fft, -trans[i:i+1]*self.render_size/self.vol_size)
+                x_fft = self.particle_fft(x_i, trans[i:i+1])
                 # x_i_ori is the original image after shifting
                 x_i_ori = fft.torch_ifft2_center(x_fft, center_fft=True)
                 x_i_ori = utils.crop_image(x_i_ori, self.crop_vol_size)
