@@ -25,3 +25,13 @@ def overwrite_config(config_pkl, args):
     return config
 
 
+def resolve_pose_candidates(requested, encode_mode, pe_type, checkpoint=None):
+    """Resolve training defaults while preserving untagged checkpoint behavior."""
+    supported = pe_type == 'vanilla' and encode_mode in ('grad', 'deform')
+    if requested is None:
+        if checkpoint is not None:
+            return checkpoint.get('pose_candidates', 'legacy8')
+        return 'symmetric7' if supported else 'legacy8'
+    if requested == 'symmetric7' and not supported:
+        raise ValueError('--pose-candidates symmetric7 requires a vanilla grad or deform decoder')
+    return requested

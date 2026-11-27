@@ -29,7 +29,7 @@ class SmallTemplate(nn.Module):
 def make_decoder(monkeypatch):
     monkeypatch.setattr(models,'ConvTemplate',SmallTemplate)
 
-    def build(kind=None):
+    def build(kind=None, **options):
         geometry = dict(com_bodies=torch.tensor([[4.,0.,0.],[-4.,0.,0.]]),
                         in_relatives=torch.zeros(2,3),
                         rotate_directions=torch.tensor([[4.,0.,0.],[-4.,0.,0.]]),
@@ -42,7 +42,7 @@ def make_decoder(monkeypatch):
             dec = models.get_decoder(5,33,1,8,'hartley','vanilla',template_type='conv',
                                      templateres=16,render_size=16,down_vol_size=16,
                                      z_affine_dim=2,masks_params=geometry,fixed_deform=True,
-                                     ref_vol=torch.ones(32,32,32))
+                                     ref_vol=torch.ones(32,32,32), **options)
         dec.get_particle_hopfs = lambda *args, **kwargs: torch.zeros(1,2)
         return dec.eval()
     return build

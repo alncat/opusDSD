@@ -49,7 +49,7 @@ class HetOnlyVAE(nn.Module):
             masks_params=None,
             num_bodies=0,
             z_affine_dim=4,
-            rank=0, image_center="fft"):
+            rank=0, image_center="fft", pose_candidates="legacy8"):
         super(HetOnlyVAE, self).__init__()
         self.lattice = lattice
         self.zdim = zdim
@@ -133,6 +133,7 @@ class HetOnlyVAE(nn.Module):
                                    symm=self.symm, ctf_grid=ctf_grid,
                                    fixed_deform=self.fixed_deform, deform_emb_size=self.deform_emb_size,
                                    render_size=self.render_size, down_vol_size=self.down_vol_size, tmp_prefix=tmp_prefix,
+                                   pose_candidates=pose_candidates,
                                    masks_params=self.masks_params, num_bodies=self.num_bodies, z_affine_dim=self.z_affine_dim, rank=rank)
 
     @classmethod
@@ -163,6 +164,7 @@ class HetOnlyVAE(nn.Module):
                           c['qlayers'], c['qdim'],
                           c['players'], c['pdim'],
                           in_dim, c['zdim'],
+                          pose_candidates=c.get('pose_candidates', 'legacy8'),
                           image_center=c.get('image_center', 'fft'),
                           encode_mode=c['encode_mode'],
                           enc_mask=enc_mask,
@@ -344,7 +346,10 @@ def load_decoder(config, weights=None, device=None):
 def get_decoder(in_dim, D, layers, dim, domain, enc_type, enc_dim=None, activation=nn.ReLU, templateres=128,
                 ref_vol=None, Apix=1., template_type=None, warp_type=None,
                 symm=None, ctf_grid=None, fixed_deform=False, deform_emb_size=2, render_size=140,
-                down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4, rank=0):
+                down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4, rank=0,
+                pose_candidates="legacy8"):
+    if pose_candidates != "legacy8" and (enc_type != "vanilla" or not fixed_deform):
+        raise ValueError("Pose candidates require a vanilla decoder with a grad or deform encoder")
     if enc_type == 'none':
         if domain == 'hartley':
             model = ResidLinearMLP(in_dim, layers, dim, 1, activation)
@@ -355,7 +360,7 @@ def get_decoder(in_dim, D, layers, dim, domain, enc_type, enc_dim=None, activati
     elif enc_type == 'vanilla':
         return VanillaDecoder(D, ref_vol, Apix, template_type=template_type, templateres=templateres, warp_type=warp_type,
                               symm_group=symm, ctf_grid=ctf_grid,
-                              fixed_deform=fixed_deform,
+                              fixed_deform=fixed_deform, pose_candidates=pose_candidates,
                               deform_emb_size=deform_emb_size,
                               zdim=in_dim - 3, render_size=render_size,
                               down_vol_size=down_vol_size, tmp_prefix=tmp_prefix, masks_params=masks_params, num_bodies=num_bodies,
@@ -1075,8 +1080,19 @@ class SpatialTransformer(nn.Module):
 class VanillaDecoder(nn.Module):
     def __init__(self, D, in_vol=None, Apix=1., template_type=None, templateres=256, warp_type=None, symm_group=None,
                  ctf_grid=None, fixed_deform=False, deform_emb_size=2, zdim=8, render_size=140,
-                 use_fourier=False, down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4, rank=0):
+                 use_fourier=False, down_vol_size=140, tmp_prefix="ref", masks_params=None, num_bodies=0, z_affine_dim=4, rank=0,
+                 pose_candidates="legacy8"):
         super(VanillaDecoder, self).__init__()
+        if pose_candidates not in ("legacy8", "symmetric7"):
+            raise ValueError(f"Unknown pose candidate set: {pose_candidates}")
+        self.pose_candidates = pose_candidates
+        rotations = None
+        if pose_candidates == "symmetric7":
+            # Identity followed by six template-frame tilts. Columns j and j+3
+            # on the ring are inverses. Compute once and move with the decoder.
+            hopfs = torch.tensor([[0., 0.]] + [[60. * j, 3.] for j in range(6)])
+            rotations = lie_tools.hopf_to_SO3(hopfs)
+        self.register_buffer('symmetric_pose_rotations', rotations, persistent=False)
         self.D = D
         self.vol_size = (D - 1)
         self.Apix = Apix
@@ -1388,7 +1404,6 @@ class VanillaDecoder(nn.Module):
         images = []
         refs = []
         masks = []
-        euler_samples = []
         B = rots.shape[0]
         #theta = np.zeros((3,4), dtype=np.float32)
 
@@ -1422,16 +1437,15 @@ class VanillaDecoder(nn.Module):
                         euler2 = euler2_sample_i + rand_ang.squeeze(1) # use minus if using euler
 
                         euler01 = euler_i[..., :2]
-                        neighbor_eulers = self.get_particle_hopfs(euler01, hp_order=64, depth=0) #hp_order=64, depth=0)
-
-                        len_euler = neighbor_eulers.shape[0]
-                        #n_eulers = torch.cat([neighbor_eulers, rand_ang.repeat(len_euler, 1)], dim=-1)
-                        #rot = lie_tools.hopf_to_SO3(n_eulers).unsqueeze(1).unsqueeze(1)
-
-                        #reset rot to local samples
-                        zero_eulers = torch.zeros_like(euler01)
-                        local_sample = self.get_particle_hopfs(zero_eulers, hp_order=64, depth=0)
-                        rot = lie_tools.hopf_to_SO3(local_sample).unsqueeze(1).unsqueeze(1)
+                        if self.symmetric_pose_rotations is None:
+                            # Preserve the legacy random draws (HEALPix sometimes
+                            # pads a seven-neighbour pixel with a random sample).
+                            self.get_particle_hopfs(euler01, hp_order=64, depth=0)
+                            local_sample = self.get_particle_hopfs(torch.zeros_like(euler01), hp_order=64, depth=0)
+                            rotations = lie_tools.hopf_to_SO3(local_sample)
+                        else:
+                            rotations = self.symmetric_pose_rotations
+                        rot = rotations[:, None, None]
 
                         i_euler = torch.cat([euler_i[..., :2], rand_ang], dim=-1)
                         rot_i = lie_tools.hopf_to_SO3(i_euler).unsqueeze(1).unsqueeze(1)
@@ -1521,12 +1535,6 @@ class VanillaDecoder(nn.Module):
 
                         #print(euler2.shape, neighbor_eulers.shape, rot.shape)
                         ref_i = ref_fft[i:i+1,...].repeat(euler2.shape[0], 1, 1, 1)
-                        # convert neighbor_eulers to a list
-                        euler_sample_i = neighbor_eulers#.repeat(2, 1)
-                        euler2_sample_i = euler2_sample_i.unsqueeze(0).repeat(len_euler, 1).view(len_euler, -1)
-                        euler_sample_i = torch.cat([euler_sample_i, -euler2_sample_i], dim=1)
-                        #euler_samples.append(euler_sample_i)
-
                         if self.fourier_transformer is None:
                             template_i = template[i:i+1,...].repeat(rot.shape[0], 1, 1, 1, 1)
                             if self.num_bodies > 1:
@@ -1579,7 +1587,6 @@ class VanillaDecoder(nn.Module):
                     else:
                         raise RuntimeError("Not implemented")
                     # append sampled angles
-                    euler_samples.append(euler_sample_i)
 
             elif self.warp_type == "affine":
                 if self.use_fourier:
@@ -1633,8 +1640,6 @@ class VanillaDecoder(nn.Module):
         images = torch.stack(images, 0)
         refs   = torch.stack(refs, 0)
         masks  = torch.stack(masks, 0)
-        if len(euler_samples):
-            euler_samples = torch.stack(euler_samples, 0)
         if len(body_rots_pred):
             if len(body_rots):
                 body_rots = torch.stack(body_rots, 0)

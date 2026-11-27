@@ -269,6 +269,9 @@ torchrun --nproc_per_node=4 -m cryodrgn.commands.train_multi_dist /work/jpma/luo
 ```
 The above command will spawn 4 processes and bind one process to one GPU, hence requiring a 4GPU server. It is not recommend to include ```--plot``` when using ```train_multi_dist```, which might increase communication overhead and slowdown the training process.
 
+New multibody runs with the grad or deform encoder use `--pose-candidates symmetric7` for local pose search: the input orientation and six 3° tilts spaced 60° apart. Both `dsd train_multi` and `train_multi_dist` inherit the saved candidate set on resume. Older checkpoints without this setting use `legacy8`. Pass `--pose-candidates legacy8` to reproduce the historical search in a new run.
+
+
 The argument following train_cv/train_multi specifies the image stack.
 The three arguments ```--pe-type vanilla --encode-mode grad --template-type conv``` ensure OPUS-DSD is selected! Our program set the default values of those arguments to the values shown in above command.
 

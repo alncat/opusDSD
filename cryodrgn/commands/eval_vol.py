@@ -157,6 +157,7 @@ def main(args):
                 device=device, symm=args.symm, ctf_grid=None,
                 deform_emb_size=args.deform_size, downfrac=downfrac,
                 templateres=templateres, window_r=window_r, masks_params=masks_params,
+                pose_candidates=cfg['model_args'].get('pose_candidates', 'legacy8'),
                 image_center=cfg['model_args'].get('image_center', 'fft'),
                 num_bodies=args.num_bodies, z_affine_dim=z_affine_dim)
 

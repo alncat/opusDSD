@@ -30,6 +30,7 @@ from cryodrgn import dataset
 from cryodrgn import ctf
 
 from cryodrgn.pose import PoseTracker
+from cryodrgn.config import resolve_pose_candidates
 from cryodrgn.models import HetOnlyVAE
 from cryodrgn.lattice import Lattice, Grid, CTFGrid
 from cryodrgn.group_stat import GroupStat
@@ -105,6 +106,9 @@ def add_args(parser):
     group = parser.add_argument_group('Encoder Network')
     group.add_argument('--enc-layers', dest='qlayers', type=int, default=3, help='Number of hidden layers (default: %(default)s)')
     group.add_argument('--enc-dim', dest='qdim', type=int, default=256, help='Number of nodes in hidden layers (default: %(default)s)')
+    group.add_argument('--pose-candidates', choices=('legacy8', 'symmetric7'),
+                       help='Local rotations for pose search. New grad/deform runs use identity plus six '
+                            '3-degree tilts. Resume inherits the saved mode (legacy8 for older checkpoints).')
     group.add_argument('--encode-mode', default='grad', choices=('conv','resid','mlp','tilt',
                                                                   'fixed', 'affine', 'fixed_blur', 'deform', 'grad',
                                                                   'vq'),
@@ -595,6 +599,7 @@ def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
     # save model weights
     torch.save({
         'epoch':epoch,
+        'pose_candidates': getattr(_unparallelize(model.decoder), 'pose_candidates', 'legacy8'),
         'encoder_state_dict':_unparallelize(model.encoder).state_dict(),
         'decoder_state_dict':_unparallelize(model.decoder).state_dict(),
         'optimizer_state_dict':optim.state_dict(),
@@ -630,6 +635,7 @@ def save_config(args, dataset, lattice, model, out_config):
                         extent=lattice.extent,
                         ignore_DC=lattice.ignore_DC)
     model_args = dict(qlayers=args.qlayers,
+                      pose_candidates=getattr(model.decoder, 'pose_candidates', 'legacy8'),
                       qdim=args.qdim,
                       players=args.players,
                       pdim=args.pdim,
@@ -822,8 +828,12 @@ def main(args):
         log(f"OPUS-DSD will fit movement to second order spherical harmonics")
 
     activation={"relu": nn.ReLU, "leaky_relu": nn.LeakyReLU}[args.activation]
+    checkpoint = torch.load(args.load, map_location='cpu') if args.load else None
+    args.pose_candidates = resolve_pose_candidates(
+        args.pose_candidates, args.encode_mode, args.pe_type, checkpoint)
     model = HetOnlyVAE(lattice, args.qlayers, args.qdim, args.players, args.pdim,
                 in_dim, args.zdim, encode_mode=args.encode_mode, enc_mask=enc_mask,
+                pose_candidates=args.pose_candidates,
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
                 activation=activation, ref_vol=ref_vol, Apix=ctf_params[0,0],
                 template_type=args.template_type, warp_type=args.warp_type,
@@ -869,7 +879,6 @@ def main(args):
     # restart from checkpoint
     if args.load:
         flog('Loading checkpoint from {}'.format(args.load))
-        checkpoint = torch.load(args.load)
         print(checkpoint.keys())
 
         if True:

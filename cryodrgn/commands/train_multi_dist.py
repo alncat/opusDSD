@@ -27,6 +27,7 @@ from cryodrgn import dataset
 from cryodrgn import ctf
 
 from cryodrgn.pose import PoseTracker
+from cryodrgn.config import resolve_pose_candidates
 from cryodrgn.models import HetOnlyVAE
 from cryodrgn.lattice import Lattice, Grid, CTFGrid
 from cryodrgn.group_stat import GroupStat
@@ -107,6 +108,9 @@ def add_args(parser):
     group = parser.add_argument_group('Encoder Network')
     group.add_argument('--enc-layers', dest='qlayers', type=int, default=3, help='Number of hidden layers (default: %(default)s)')
     group.add_argument('--enc-dim', dest='qdim', type=int, default=256, help='Number of nodes in hidden layers (default: %(default)s)')
+    group.add_argument('--pose-candidates', choices=('legacy8', 'symmetric7'),
+                       help='Local rotations for pose search. New grad/deform runs use identity plus six '
+                            '3-degree tilts. Resume inherits the saved mode (legacy8 for older checkpoints).')
     group.add_argument('--encode-mode', default='grad', choices=('conv','resid','mlp','tilt',
                                                                   'fixed', 'affine', 'fixed_blur', 'deform', 'grad',
                                                                   'vq'),
@@ -573,6 +577,7 @@ def save_checkpoint(model, optim, posetracker, pose_optimizer, epoch,
     # save model weights
     torch.save({
         'epoch':epoch,
+        'pose_candidates': getattr(_unparallelize(model.decoder), 'pose_candidates', 'legacy8'),
         # encoder and decoder are wrapped separately, model.state_dict() would only be a copy
         # of the two state dicts below with a module. prefix inserted by DDP, which nothing reads
         'image_center': getattr(_unparallelize(model.encoder), 'image_center', 'fft'),
@@ -609,6 +614,7 @@ def save_config(args, dataset, lattice, model, out_config):
                         extent=lattice.extent,
                         ignore_DC=lattice.ignore_DC)
     model_args = dict(qlayers=args.qlayers,
+                      pose_candidates=getattr(model.decoder, 'pose_candidates', 'legacy8'),
                       qdim=args.qdim,
                       players=args.players,
                       pdim=args.pdim,
@@ -779,6 +785,8 @@ def main(args):
         group_stat = None
 
     checkpoint = torch.load(args.load, map_location=device) if args.load else None
+    args.pose_candidates = resolve_pose_candidates(
+        args.pose_candidates, args.encode_mode, args.pe_type, checkpoint)
     args.image_center = resolve_image_center(args.image_center, args.encode_mode, checkpoint)
     if rank == 0:
         flog(f'Particle image center: {args.image_center}')
@@ -811,6 +819,7 @@ def main(args):
     activation={"relu": nn.ReLU, "leaky_relu": nn.LeakyReLU}[args.activation]
     model = HetOnlyVAE(lattice, args.qlayers, args.qdim, args.players, args.pdim,
                 in_dim, args.zdim, encode_mode=args.encode_mode, enc_mask=enc_mask,
+                pose_candidates=args.pose_candidates,
                 enc_type=args.pe_type, enc_dim=args.pe_dim, domain=args.domain,
                 activation=activation, ref_vol=ref_vol, Apix=ctf_params[0,0],
                 template_type=args.template_type, warp_type=args.warp_type,
